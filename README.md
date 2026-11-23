@@ -12,10 +12,12 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
 
 - **Chart:** Kerzen und Volumen live von Binance, 15 Zeitrahmen (1m bis 1M), unbegrenzte Historie beim
   Zurückscrollen, Fadenkreuz mit OHLC, Log-Skala, Symbolsuche über alle Binance-Spot-Paare
+- **Aktien, ETFs, Rohstoffe:** über Binance Futures, z. B. `NVDAUSDT.P`, `MSTRUSDT.P`, `TSLAUSDT.P`,
+  `QQQUSDT.P` (Nasdaq-100), `SPYUSDT.P` (S&P 500), `IWMUSDT.P` (Russell 2000), `XAUUSDT.P` (Gold), dazu rund 250 weitere
 - **Zeichnen:** Trendlinie, Strahl, horizontale/vertikale Linie, Rechteck, Text, Fibonacci mit eigenen Levels
   (inkl. 0.886), Messwerkzeug. Verschieben, Farbe, Rückgängig/Wiederholen. Pro Symbol gespeichert, auf allen Zeitrahmen sichtbar
-- **Indikatoren:** SMA, EMA, Bollinger, VWAP, Volumen-MA, RSI, MACD, Stochastic RSI, ATR, beliebig viele
-  mit eigenen Parametern und Farben
+- **Indikatoren:** SMA, EMA, Bollinger, VWAP, Volumen-MA, RSI, MACD, Stochastic RSI, ATR, Volumenprofil
+  (POC, Value Area, Kauf-/Verkaufsvolumen), beliebig viele mit eigenen Parametern und Farben
 - **Watchlist:** Live-Kurs und 24h-Veränderung, hinzufügen per Stern oder „+“, sortieren per Ziehen
 - **Speichern:** alles im Browser, dazu Sicherung als JSON exportieren/importieren
 - **Handy:** bedienbar per Touch, Watchlist als Schublade
@@ -33,6 +35,13 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
     (Symbole werden per `SUBSCRIBE`/`UNSUBSCRIBE` an- und abgemeldet, ohne neu zu verbinden)
   - Symbolliste: `/api/v3/exchangeInfo` (24 h im Browser zwischengespeichert)
   - Ausweich-Server, falls `api.binance.com` nicht erreichbar oder gesperrt ist: `data-api.binance.vision` / `data-stream.binance.vision`
+  - **Futures** (Aktien, ETFs, Rohstoffe, Krypto-Perpetuals): `fapi.binance.com/fapi/v1/…` und `wss://fstream.binance.com/ws`.
+    Im Tool tragen Futures-Symbole die Endung `.P` (wie bei TradingView). An Binance geht das Symbol ohne Endung.
+    Aktien heißen bei Binance „TradFi-Perpetuals“ (`underlyingType` EQUITY/COMMODITY …). Wichtig:
+    - Es sind Kontrakt-Preise in USDT, gehandelt rund um die Uhr. Sie folgen dem Basiswert eng, können aber
+      außerhalb der Börsenzeiten abweichen
+    - Die Historie beginnt erst mit der Listung bei Binance (z. B. NVDA 26.03.2026, QQQ/SPY 06.04.2026)
+    - `SPXUSDT.P` ist ein Meme-Coin, **nicht** der S&P 500. Dafür `SPYUSDT.P` nehmen
 - **Speichern:** `localStorage` (Präfix `ct.`). Zeichnungen pro Symbol unter `ct.drawings.<SYMBOL>`.
   Export/Import als JSON-Sicherung über die Werkzeugleiste. Exportiert wird alles, was das Tool speichert,
   außer der Symbolliste (die wird ohnehin neu geladen).
@@ -43,9 +52,9 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
 index.html        Layout: Topbar, Werkzeugleiste links, Chart, Watchlist rechts, Suchfenster
 css/style.css     Dunkles Design, Grid-Layout, schmale Bildschirme
 js/storage.js     CT.store – localStorage-Hilfen (get/set/remove/keys) und JSON-Sicherung (exportAll/importAll)
-js/binance.js     CT.binance – REST (klines, exchangeInfo) und WebSocket mit Auto-Reconnect
+js/binance.js     CT.binance – Spot + Futures: REST (klines, exchangeInfo, 24h-Ticker) und WebSockets mit Auto-Reconnect
 js/chart.js       CT.chart – Kerzen, Volumen, Legende, Log-Skala, Live-Updates, Historie nachladen
-js/symbols.js     CT.symbols – Symbolliste laden, zwischenspeichern, durchsuchen
+js/symbols.js     CT.symbols – Symbolliste (Spot + Futures) laden, zwischenspeichern, durchsuchen, Filter
 js/drawings.js    CT.drawings – Zeichenwerkzeuge: Canvas-Ebene, Treffer, Ziehen, Eigenschaften, Verlauf, Export
 js/ta.js          CT.ta – Rechenfunktionen wie Pine ta.* (sma, ema, rma, stdev, rsi, stoch, macd, atr, vwap …)
 js/indicators.js  CT.indicators – Indikator-Definitionen (DEFS), Serien/Bereiche, Legenden, Einstellungsfenster
@@ -84,6 +93,8 @@ entsprechen damit TradingView, sobald genug Historie geladen ist.
 | Aktion | So geht's |
 |---|---|
 | Symbol wechseln | Auf das Symbol oben links klicken oder einfach lostippen (z. B. `ETH`), Enter |
+| Aktien finden | In der Suche z. B. `NVDA` oder `QQQ` tippen, oder Filter „Aktien & ETFs“ / „Rohstoffe“ wählen |
+| Volumenprofil | Indikatoren → „Volumenprofil“: Zeilen, Breite, Value Area %, sichtbarer Bereich oder alle Kerzen, links/rechts |
 | Zeitrahmen | Leiste oben: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1D, 3D, 1W, 1M |
 | Zoom | Mausrad / Pinch, Ziehen auf Preis- oder Zeitachse |
 | Log-Skala | Knopf `Log` oder `Alt+L` |
@@ -169,6 +180,16 @@ Pine-Dateien für Schritt 4 noch fehlen. **Offen ist damit nur noch Schritt 4.**
     Handy-Ansicht 375 × 812 mit Touch-Emulation: Schublade, Symbol öffnen, Trendlinie per Touch ziehen
   - Nicht getestet: echtes iPhone/Android-Gerät, Sortieren per Ziehen (HTML-Drag-and-Drop lässt sich automatisiert
     nicht zuverlässig auslösen) → einmal selbst ausprobieren
+- [x] **Zusatz – Aktien über Binance Futures und Volumenprofil** *(fertig)*
+  - Rund 250 Aktien, ETFs und Rohstoffe als Futures (`.P`) in Suche, Chart, Watchlist, Zeichnungen und Indikatoren.
+    Neue Suchfilter: Aktien & ETFs, Rohstoffe, Krypto Spot, Futures
+  - Volumenprofil (sichtbarer Bereich oder alle Kerzen): Kauf-/Verkaufsvolumen je Preiszeile, POC,
+    Value Area (VAH/VAL), Werte in der Legende. Das Volumen jeder Kerze wird anteilig über ihre Spanne von Tief
+    bis Hoch verteilt, denn Binance liefert keine Umsätze pro Preis
+  - Behoben: Die Legendenpositionierung startete bei jedem Neuaufbau eine weitere Endlosschleife
+  - Getestet: NVDA 1h/1D live (Historie ab Listung, Zurückscrollen stoppt sauber), Suche/Filter, NVDA/QQQ/Gold in
+    der Watchlist live, Zeichnung auf NVDA getrennt gespeichert und in der Sicherung, Volumenprofil auf NVDA und BTC
+    (POC liegt innerhalb der Value Area, diese innerhalb der Kursspanne)
 
 ## Lokal starten
 

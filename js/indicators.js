@@ -128,7 +128,72 @@ CT.indicators = (function () {
       calc: function (b, p) { return { v: ta.atr(b, p.length) }; },
       label: function (p) { return 'ATR ' + p.length; },
     },
+    // Volumenprofil: wird nicht als Serie, sondern auf einer eigenen Canvas gezeichnet (place 'canvas')
+    vp: {
+      name: 'Volumenprofil', full: 'Volume Profile (sichtbarer Bereich) mit POC und Value Area', place: 'canvas', format: 'price',
+      params: [
+        { key: 'rows', label: 'Zeilen', type: 'int', def: 24, min: 4, max: 400 },
+        { key: 'width', label: 'Breite (% des Charts)', type: 'int', def: 25, min: 5, max: 90 },
+        { key: 'va', label: 'Value Area (%)', type: 'int', def: 70, min: 10, max: 100 },
+        { key: 'range', label: 'Bereich', type: 'select', options: ['Sichtbar', 'Alle Kerzen'], def: 'Sichtbar' },
+        { key: 'side', label: 'Seite', type: 'select', options: ['Rechts', 'Links'], def: 'Rechts' },
+      ],
+      plots: [
+        { key: 'poc', title: 'POC', color: '#ffd600', value: true },
+        { key: 'vah', title: 'VAH', color: '#9598a1', value: true },
+        { key: 'val', title: 'VAL', color: '#9598a1', value: true },
+        { key: 'up', title: 'Kaufvolumen', color: '#26a69a' },
+        { key: 'down', title: 'Verkaufsvolumen', color: '#ef5350' },
+      ],
+      label: function (p) { return 'VP ' + p.rows + (p.range === 'Sichtbar' ? '' : ' alle'); },
+    },
   };
+
+  /* =================== Volumenprofil-Rechnung ===================
+     Das Volumen jeder Kerze wird anteilig auf alle Preiszeilen verteilt, die die Kerze von Tief bis Hoch
+     überdeckt (Näherung – Binance liefert keine Umsätze pro Preis). Grüne Kerzen zählen als Kauf-,
+     rote als Verkaufsvolumen. POC = Zeile mit dem meisten Volumen. Value Area = vom POC aus nach oben/unten
+     erweitert (jeweils zur volumenstärkeren Seite), bis der eingestellte Anteil des Gesamtvolumens erreicht ist. */
+  function volumeProfile(bars, from, to, rows, vaPct) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = from; i <= to; i++) { lo = Math.min(lo, bars[i].low); hi = Math.max(hi, bars[i].high); }
+    if (!isFinite(lo) || hi <= lo) return null;
+    const step = (hi - lo) / rows;
+    const up = new Array(rows).fill(0);
+    const down = new Array(rows).fill(0);
+    for (let i = from; i <= to; i++) {
+      const b = bars[i];
+      const target = b.close >= b.open ? up : down;
+      const span = b.high - b.low;
+      if (span <= 0) {
+        target[Math.min(rows - 1, Math.floor((b.close - lo) / step))] += b.volume;
+        continue;
+      }
+      const r0 = Math.max(0, Math.floor((b.low - lo) / step));
+      const r1 = Math.min(rows - 1, Math.floor((b.high - lo) / step));
+      for (let r = r0; r <= r1; r++) {
+        const overlap = Math.min(b.high, lo + (r + 1) * step) - Math.max(b.low, lo + r * step);
+        if (overlap > 0) target[r] += b.volume * overlap / span;
+      }
+    }
+    const total = up.map(function (u, r) { return u + down[r]; });
+    const sum = total.reduce(function (a, v) { return a + v; }, 0);
+    let poc = 0;
+    total.forEach(function (v, r) { if (v > total[poc]) poc = r; });
+    let a = poc;
+    let z = poc;
+    let acc = total[poc];
+    while (acc < sum * vaPct / 100 && (a > 0 || z < rows - 1)) {
+      const below = a > 0 ? total[a - 1] : -1;
+      const above = z < rows - 1 ? total[z + 1] : -1;
+      if (above >= below) { z++; acc += total[z]; } else { a--; acc += total[a]; }
+    }
+    return {
+      lo: lo, step: step, up: up, down: down, total: total, max: total[poc], poc: poc, vaLow: a, vaHigh: z,
+      pocPrice: lo + (poc + 0.5) * step, vah: lo + (z + 1) * step, val: lo + a * step,
+    };
+  }
 
   function src(p) { return p.source && p.source !== 'close' ? ' ' + p.source : ''; }
 
@@ -195,6 +260,7 @@ CT.indicators = (function () {
       if (!inst.visible) return;
       const def = DEFS[inst.type];
       const rec = { inst: inst, def: def, series: {}, pane: def.place === 'pane' ? paneIndex++ : 0, res: null };
+      if (def.place === 'canvas') { recs.push(rec); return; } // zeichnet drawCanvas()
       def.plots.forEach(function (pl) {
         const opts = {
           priceLineVisible: false,
@@ -240,7 +306,9 @@ CT.indicators = (function () {
   /** Alles neu berechnen und komplett setzen (nach neuen Daten). */
   function setAll() {
     const bars = CT.chart.bars;
+    canvasDirty = true;
     recs.forEach(function (rec) {
+      if (!rec.def.calc) return;
       rec.res = rec.def.calc(bars, rec.inst.params);
       rec.def.plots.forEach(function (pl) {
         const vals = rec.res[pl.key];
@@ -262,7 +330,9 @@ CT.indicators = (function () {
     const bars = CT.chart.bars;
     const i = bars.length - 1;
     if (i < 0) return;
+    canvasDirty = true;
     recs.forEach(function (rec) {
+      if (!rec.def.calc) return;
       rec.res = rec.def.calc(bars, rec.inst.params);
       rec.def.plots.forEach(function (pl) {
         const v = rec.res[pl.key][i];
@@ -289,6 +359,7 @@ CT.indicators = (function () {
     row.dataset.id = inst.id;
     let html = '<span class="il-name"></span><span class="il-vals">';
     def.plots.forEach(function (pl) {
+      if (def.place === 'canvas' && !pl.value) return; // nur Farbe, kein Wert in der Legende
       const c = pl.fixedColors ? '#8a90a0' : colorOf(inst, pl);
       html += '<span class="il-v" data-plot="' + pl.key + '" style="color:' + c + '"></span>';
     });
@@ -339,8 +410,9 @@ CT.indicators = (function () {
       rec.def.plots.forEach(function (pl) {
         const el = rec.row.querySelector('[data-plot="' + pl.key + '"]');
         if (!el) return;
-        const v = rec.res[pl.key][i];
-        el.textContent = fmtValue(rec.def, v);
+        const arr = rec.res[pl.key];
+        const v = Array.isArray(arr) ? arr[i] : arr; // Canvas-Indikatoren liefern einzelne Werte
+        el.textContent = (rec.def.place === 'canvas' ? pl.title + ' ' : '') + fmtValue(rec.def, v);
         if (pl.fixedColors && rec.res.colors) el.style.color = rec.res.colors[pl.key][i] || '#8a90a0';
       });
     });
@@ -362,7 +434,123 @@ CT.indicators = (function () {
         rec.legendBox.style.top = (top + 4) + 'px';
       });
     }
-    requestAnimationFrame(layoutLegends);
+  }
+
+  /* =================== Canvas-Indikatoren (Volumenprofil) =================== */
+  let vpCanvas, vpCtx;
+  let canvasDirty = true;
+  let canvasSig = '';
+
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  function drawCanvas() {
+    const chartEl = document.getElementById('chart');
+    const W = chartEl.clientWidth;
+    const H = chartEl.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    if (vpCanvas.width !== Math.round(W * dpr) || vpCanvas.height !== Math.round(H * dpr)) {
+      vpCanvas.width = Math.round(W * dpr);
+      vpCanvas.height = Math.round(H * dpr);
+      vpCanvas.style.width = W + 'px';
+      vpCanvas.style.height = H + 'px';
+    }
+    vpCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    vpCtx.clearRect(0, 0, W, H);
+    const bars = CT.chart.bars;
+    const n = bars.length;
+    if (!n) return;
+    const paneW = W - api.priceScale('right').width();
+    const paneH = api.panes()[0].getHeight();
+    const candles = CT.chart.series.candles;
+    const range = api.timeScale().getVisibleLogicalRange();
+    vpCtx.save();
+    vpCtx.beginPath();
+    vpCtx.rect(0, 0, paneW, paneH);
+    vpCtx.clip();
+    recs.forEach(function (rec) {
+      if (rec.def.place !== 'canvas') return;
+      const p = rec.inst.params;
+      let from = 0;
+      let to = n - 1;
+      if (p.range === 'Sichtbar' && range) {
+        from = Math.max(0, Math.floor(range.from));
+        to = Math.min(n - 1, Math.ceil(range.to));
+      }
+      if (to < from) { rec.res = null; return; }
+      const vp = volumeProfile(bars, from, to, p.rows, p.va);
+      if (!vp) { rec.res = null; return; }
+      rec.res = { poc: vp.pocPrice, vah: vp.vah, val: vp.val };
+      const inst = rec.inst;
+      const col = {};
+      rec.def.plots.forEach(function (pl) { col[pl.key] = colorOf(inst, pl); });
+      const maxW = paneW * p.width / 100;
+      const right = p.side !== 'Links';
+      for (let r = 0; r < p.rows; r++) {
+        if (!vp.total[r]) continue;
+        const yTop = candles.priceToCoordinate(vp.lo + (r + 1) * vp.step);
+        const yBot = candles.priceToCoordinate(vp.lo + r * vp.step);
+        if (yTop === null || yBot === null) continue;
+        const y = Math.min(yTop, yBot);
+        const h = Math.max(1, Math.abs(yBot - yTop) - 1);
+        const inVA = r >= vp.vaLow && r <= vp.vaHigh;
+        const a = inVA ? 0.55 : 0.22;
+        const wUp = maxW * vp.up[r] / vp.max;
+        const wDn = maxW * vp.down[r] / vp.max;
+        vpCtx.fillStyle = rgba(col.up, a);
+        vpCtx.fillRect(right ? paneW - wUp : 0, y, wUp, h);
+        vpCtx.fillStyle = rgba(col.down, a);
+        vpCtx.fillRect(right ? paneW - wUp - wDn : wUp, y, wDn, h);
+      }
+      // POC über den ganzen Bereich, VAH/VAL über die Profilbreite
+      const line = function (price, color, dash, x0, x1, width) {
+        const y = candles.priceToCoordinate(price);
+        if (y === null) return;
+        vpCtx.strokeStyle = color;
+        vpCtx.lineWidth = width;
+        vpCtx.setLineDash(dash);
+        vpCtx.beginPath();
+        vpCtx.moveTo(x0, Math.round(y) + 0.5);
+        vpCtx.lineTo(x1, Math.round(y) + 0.5);
+        vpCtx.stroke();
+      };
+      const x0 = right ? paneW - maxW : 0;
+      const x1 = right ? paneW : maxW;
+      const fromX = api.timeScale().logicalToCoordinate(from);
+      line(vp.pocPrice, col.poc, [], Math.max(0, fromX === null ? 0 : fromX), paneW, 1.5);
+      line(vp.vah, col.vah, [3, 3], x0, x1, 1);
+      line(vp.val, col.val, [3, 3], x0, x1, 1);
+    });
+    vpCtx.restore();
+    vpCtx.setLineDash([]);
+    renderValues();
+  }
+
+  /** Ein Loop für alles, was laufend nachgeführt werden muss: Legendenpositionen und Canvas-Indikatoren. */
+  function frame() {
+    layoutLegends();
+    if (recs.some(function (r) { return r.def.place === 'canvas'; })) {
+      const c = CT.chart.series.candles;
+      const bars = CT.chart.bars;
+      const last = bars[bars.length - 1];
+      const range = api.timeScale().getVisibleLogicalRange();
+      const sig = [
+        range ? range.from.toFixed(2) + ':' + range.to.toFixed(2) : '', bars.length,
+        last ? c.priceToCoordinate(last.close) : 0, last ? c.priceToCoordinate(last.close * 1.2) : 0,
+        api.panes()[0].getHeight(), document.getElementById('chart').clientWidth, api.priceScale('right').width(),
+      ].join('|');
+      if (canvasDirty || sig !== canvasSig) {
+        canvasSig = sig;
+        canvasDirty = false;
+        drawCanvas();
+      }
+    } else if (canvasSig !== 'empty') {
+      canvasSig = 'empty';
+      drawCanvas();
+    }
+    requestAnimationFrame(frame);
   }
 
   function onLegendClick(e) {
@@ -412,7 +600,7 @@ CT.indicators = (function () {
   function closeModal() { modal.hidden = true; }
 
   function placeLabel(def) {
-    return { main: 'Im Chart', vol: 'Volumen', pane: 'Eigener Bereich' }[def.place];
+    return { main: 'Im Chart', vol: 'Volumen', pane: 'Eigener Bereich', canvas: 'Im Chart' }[def.place];
   }
 
   function renderCatalog() {
@@ -563,6 +751,12 @@ CT.indicators = (function () {
     legendEl = document.getElementById('legend');
     modal = document.getElementById('indModal');
 
+    // Canvas für das Volumenprofil: über dem Chart, unter der Zeichen-Ebene
+    vpCanvas = document.createElement('canvas');
+    vpCanvas.className = 'vp-layer';
+    wrap.insertBefore(vpCanvas, wrap.querySelector('.draw-layer'));
+    vpCtx = vpCanvas.getContext('2d');
+
     mainLegend = document.createElement('div');
     mainLegend.className = 'ind-legend main-ind-legend';
     wrap.appendChild(mainLegend);
@@ -596,6 +790,7 @@ CT.indicators = (function () {
 
     list = sanitize(CT.store.get('indicators', []));
     rebuild();
+    requestAnimationFrame(frame);
   }
 
   return {

@@ -718,3 +718,12 @@ svg {
   .ind-btn span { display: none; }
   .ind-legend { font-size: 11px; }
 }
+
+/* Volumenprofil-Ebene: über den Kerzen, unter den Zeichnungen */
+.vp-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}

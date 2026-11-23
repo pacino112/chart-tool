@@ -138,7 +138,7 @@ CT.chart = (function () {
     if (!legendEl) return;
     const b = bars[index];
     const head = '<span class="lg-title">' + (current.symbol || '') + '</span>' +
-      '<span class="lg-sub">' + labelFor(current.interval) + ' · Binance</span>';
+      '<span class="lg-sub">' + labelFor(current.interval) + ' · ' + marketLabel() + '</span>';
     if (!b) { legendEl.innerHTML = head; return; }
     const prev = bars[index - 1];
     const ref = prev ? prev.close : b.open;
@@ -154,6 +154,13 @@ CT.chart = (function () {
       kv('C', fmtPrice(b.close)) +
       '<span class="' + chgCls + '">' + (diff >= 0 ? '+' : '') + fmtPrice(diff) + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%)</span>' +
       kv('Vol', volFmt.format(b.volume), 'lg-sub');
+  }
+
+  /** "Binance" bei Spot, sonst z. B. "Binance Futures · Aktie/ETF" */
+  function marketLabel() {
+    if (!current.symbol || !CT.binance.isFutures(current.symbol)) return 'Binance';
+    const info = current.info || (CT.symbols && CT.symbols.get(current.symbol));
+    return 'Binance Futures' + (info && info.kind !== 'COIN' ? ' · ' + info.label : '');
   }
 
   function labelFor(interval) {
@@ -350,6 +357,7 @@ CT.chart = (function () {
     current.info = info;
     applyPriceFormat();
     if (!hovering) renderLegend(bars.length - 1);
+    emitPrice();
   }
 
   function setLog(enabled) {

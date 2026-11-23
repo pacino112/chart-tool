@@ -29,7 +29,7 @@ window.CT = window.CT || {};
 
   function readHash() {
     const m = location.hash.replace(/^#/, '').split('/');
-    const sym = (m[0] || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const sym = CT.symbols.normalize(m[0] || '');
     if (sym) state.symbol = sym;
     if (m[1] && INTERVALS.indexOf(m[1]) !== -1) state.interval = m[1];
   }
@@ -161,9 +161,11 @@ window.CT = window.CT || {};
   function renderQuoteFilter() {
     const box = $('quoteFilter');
     box.innerHTML = '';
-    CT.symbols.QUOTES.forEach(function (q) {
+    if (!CT.symbols.FILTERS.some(function (f) { return f.id === search.quote; })) search.quote = 'ALL';
+    CT.symbols.FILTERS.forEach(function (f) {
+      const q = f.id;
       const b = document.createElement('button');
-      b.textContent = q === 'ALL' ? 'Alle' : q;
+      b.textContent = f.label;
       b.className = q === search.quote ? 'active' : '';
       b.addEventListener('click', function () {
         search.quote = q;
@@ -199,7 +201,7 @@ window.CT = window.CT || {};
         '<button class="sr-star" title="Watchlist"><svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg></button>';
       li.children[0].textContent = base;
       li.children[1].textContent = quote;
-      li.children[2].textContent = tag || 'Spot';
+      li.children[2].textContent = tag || info.label || 'Spot';
       const star = li.querySelector('.sr-star');
       star.classList.toggle('on', CT.watchlist.has(info.symbol));
       star.addEventListener('click', function (e) {
@@ -216,17 +218,18 @@ window.CT = window.CT || {};
     }
 
     if (!q) {
-      const recent = state.recent
-        .map(function (s) { return CT.symbols.get(s) || { symbol: s }; })
-        .filter(function (i) { return search.quote === 'ALL' || i.quote === search.quote; });
+      const category = ['STOCKS', 'COMMODITY', 'PERP', 'SPOT'].indexOf(search.quote) !== -1;
+      const recent = search.quote !== 'ALL' ? [] : state.recent
+        .map(function (s) { return CT.symbols.get(s) || { symbol: s }; });
       if (recent.length) {
         section('Zuletzt geöffnet');
-        recent.forEach(function (i) { row(i, 'Zuletzt'); });
+        recent.forEach(function (i) { row(i); });
       }
-      const popular = CT.symbols.search('', search.quote, 20)
-        .filter(function (i) { return state.recent.indexOf(i.symbol) === -1; });
+      const popular = CT.symbols.search('', search.quote, category ? 300 : 30)
+        .filter(function (i) { return recent.indexOf(i) === -1 && state.recent.indexOf(i.symbol) === -1; });
       if (popular.length) {
-        section('Beliebt');
+        const f = CT.symbols.FILTERS.find(function (x) { return x.id === search.quote; });
+        section(category ? f.label : 'Beliebt');
         popular.forEach(function (i) { row(i); });
       }
     } else {
@@ -253,7 +256,7 @@ window.CT = window.CT || {};
     const it = search.items[i];
     let symbol;
     if (it) symbol = it.info.symbol;
-    else symbol = $('searchInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    else symbol = CT.symbols.normalize($('searchInput').value);
     if (!symbol) return;
     closeSearch();
     if (search.mode === 'add') {

@@ -46,7 +46,7 @@ CT.store = (function () {
   /* ---------- Sicherung als JSON ----------
      Exportiert alles, was das Tool speichert (Zeichnungen, Einstellungen, später Indikatoren),
      außer Zwischenspeichern, die sich neu laden lassen. */
-  const NOT_EXPORTED = ['symbols.v1'];
+  const NOT_EXPORTED = ['symbols.v1', 'symbols.v2'];
 
   function exportAll() {
     const data = {};

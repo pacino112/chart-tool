@@ -1,26 +1,46 @@
-/* Datenquelle: öffentliche Binance-API (ohne Schlüssel).
-   - Kerzen über REST  (/api/v3/klines)
-   - Live-Kerze über WebSocket (<symbol>@kline_<interval>)
-   Fällt der Hauptserver aus oder ist im Land gesperrt (HTTP 451/403),
+/* Datenquelle: öffentliche Binance-API (ohne Schlüssel), zwei Märkte:
+   - Spot:    Symbole wie "BTCUSDT"          → api.binance.com / stream.binance.com
+   - Futures: Symbole mit Endung ".P" wie bei TradingView, z. B. "NVDAUSDT.P", "QQQUSDT.P", "XAUUSDT.P"
+              → fapi.binance.com / fstream.binance.com. Darüber laufen Aktien, ETFs und Rohstoffe
+              (Binance "TradFi"-Perpetuals) sowie Krypto-Perpetuals.
+   Die Endung ".P" gibt es nur im Tool; an Binance geht immer das rohe Symbol ohne Endung.
+   Fällt beim Spot der Hauptserver aus oder ist im Land gesperrt (HTTP 451/403),
    wird automatisch auf die offiziellen Marktdaten-Spiegel (binance.vision) gewechselt. */
 window.CT = window.CT || {};
 
 CT.binance = (function () {
-  const REST_HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
-  const WS_HOSTS = ['wss://stream.binance.com:9443/ws', 'wss://data-stream.binance.vision/ws'];
+  const MARKETS = {
+    spot: {
+      rest: ['https://api.binance.com', 'https://data-api.binance.vision'],
+      ws: ['wss://stream.binance.com:9443/ws', 'wss://data-stream.binance.vision/ws'],
+      api: '/api/v3',
+    },
+    futures: {
+      rest: ['https://fapi.binance.com'],
+      ws: ['wss://fstream.binance.com/ws'],
+      api: '/fapi/v1',
+    },
+  };
   const MAX_LIMIT = 1000;
-  let restIndex = 0;
+  const restIndex = { spot: 0, futures: 0 };
 
-  async function request(path, params) {
+  /* ---------- Symbole & Märkte ---------- */
+  function isFutures(symbol) { return /\.P$/.test(symbol); }
+  function marketOf(symbol) { return isFutures(symbol) ? 'futures' : 'spot'; }
+  function rawSymbol(symbol) { return symbol.replace(/\.P$/, ''); }
+  function toolSymbol(raw, market) { return market === 'futures' ? raw + '.P' : raw; }
+
+  async function request(market, path, params) {
+    const m = MARKETS[market];
     const qs = new URLSearchParams(params || {}).toString();
     let lastError;
-    for (let i = 0; i < REST_HOSTS.length; i++) {
-      const idx = (restIndex + i) % REST_HOSTS.length;
-      const url = REST_HOSTS[idx] + path + (qs ? '?' + qs : '');
+    for (let i = 0; i < m.rest.length; i++) {
+      const idx = (restIndex[market] + i) % m.rest.length;
+      const url = m.rest[idx] + m.api + path + (qs ? '?' + qs : '');
       try {
         const res = await fetch(url);
         if (res.ok) {
-          restIndex = idx;
+          restIndex[market] = idx;
           return await res.json();
         }
         let msg = 'HTTP ' + res.status;
@@ -53,14 +73,14 @@ CT.binance = (function () {
   /** Kerzen laden. endTime (ms) für ältere Historie, ohne endTime die neuesten. */
   async function klines(symbol, interval, opts) {
     const o = opts || {};
-    const params = { symbol, interval, limit: Math.min(o.limit || MAX_LIMIT, MAX_LIMIT) };
+    const params = { symbol: rawSymbol(symbol), interval: interval, limit: Math.min(o.limit || MAX_LIMIT, MAX_LIMIT) };
     if (o.endTime != null) params.endTime = o.endTime;
-    const data = await request('/api/v3/klines', params);
+    const data = await request(marketOf(symbol), '/klines', params);
     return data.map(parseKline);
   }
 
-  function exchangeInfo() {
-    return request('/api/v3/exchangeInfo');
+  function exchangeInfo(market) {
+    return request(market || 'spot', '/exchangeInfo');
   }
 
   /**
@@ -69,7 +89,8 @@ CT.binance = (function () {
    */
   function streamKlines(symbol, interval, handlers) {
     const h = handlers || {};
-    const stream = symbol.toLowerCase() + '@kline_' + interval;
+    const hosts = MARKETS[marketOf(symbol)].ws;
+    const stream = rawSymbol(symbol).toLowerCase() + '@kline_' + interval;
     let ws = null;
     let stopped = false;
     let attempt = 0;
@@ -82,7 +103,7 @@ CT.binance = (function () {
     function connect() {
       if (stopped) return;
       status('connecting');
-      ws = new WebSocket(WS_HOSTS[hostIndex % WS_HOSTS.length] + '/' + stream);
+      ws = new WebSocket(hosts[hostIndex % hosts.length] + '/' + stream);
 
       ws.onopen = function () {
         attempt = 0;
@@ -137,23 +158,48 @@ CT.binance = (function () {
     };
   }
 
-  /** 24-Stunden-Statistik für mehrere Symbole in einer Anfrage. */
-  async function ticker24h(symbols) {
-    if (!symbols.length) return [];
-    const data = await request('/api/v3/ticker/24hr', { symbols: JSON.stringify(symbols), type: 'MINI' });
-    return data.map(function (t) {
-      const last = +t.lastPrice;
-      const open = +t.openPrice;
-      return { symbol: t.symbol, price: last, open: open, change: open ? (last - open) / open * 100 : 0, quoteVolume: +t.quoteVolume };
-    });
+  function tickerFrom(t, market) {
+    const last = +t.lastPrice;
+    const open = +t.openPrice;
+    return {
+      symbol: toolSymbol(t.symbol, market),
+      price: last,
+      open: open,
+      change: open ? (last - open) / open * 100 : 0,
+      quoteVolume: +t.quoteVolume,
+    };
   }
 
   /**
-   * Live-Kurse (rollierende 24 h) für eine veränderliche Liste von Symbolen über EINE Verbindung.
-   * Nutzt SUBSCRIBE/UNSUBSCRIBE, damit beim Ändern der Watchlist nicht neu verbunden werden muss.
-   * Rückgabe: { set(symbols), close() }
+   * 24-Stunden-Statistik für mehrere Symbole (Spot und Futures gemischt).
+   * Spot: eine Sammelabfrage. Futures: kennt keine Symbolliste → alle holen und filtern.
    */
-  function streamMiniTickers(onTick, onStatus) {
+  async function ticker24h(symbols) {
+    const spot = symbols.filter(function (s) { return !isFutures(s); });
+    const fut = symbols.filter(isFutures);
+    const out = [];
+    if (spot.length) {
+      const data = await request('spot', '/ticker/24hr', { symbols: JSON.stringify(spot), type: 'MINI' });
+      data.forEach(function (t) { out.push(tickerFrom(t, 'spot')); });
+    }
+    if (fut.length) {
+      const wanted = fut.map(rawSymbol);
+      const data = fut.length === 1
+        ? [await request('futures', '/ticker/24hr', { symbol: wanted[0] })]
+        : await request('futures', '/ticker/24hr');
+      data.forEach(function (t) { if (wanted.indexOf(t.symbol) !== -1) out.push(tickerFrom(t, 'futures')); });
+    }
+    return out;
+  }
+
+  /**
+   * Live-Kurse (rollierende 24 h) für eine veränderliche Liste von Symbolen eines Marktes über EINE Verbindung.
+   * Nutzt SUBSCRIBE/UNSUBSCRIBE, damit beim Ändern der Watchlist nicht neu verbunden werden muss.
+   * Rückgabe: { set(symbols), close() } – symbols in Tool-Schreibweise (mit ".P" bei Futures)
+   */
+  function streamMiniTickers(onTick, onStatus, market) {
+    const mk = market || 'spot';
+    const hosts = MARKETS[mk].ws;
     let ws = null;
     let wanted = [];
     let subscribed = [];
@@ -162,8 +208,9 @@ CT.binance = (function () {
     let hostIndex = 0;
     let timer = null;
     let reqId = 1;
+    let started = false;
 
-    function name(s) { return s.toLowerCase() + '@miniTicker'; }
+    function name(s) { return rawSymbol(s).toLowerCase() + '@miniTicker'; }
     function status(s) { if (onStatus) onStatus(s); }
 
     function send(method, symbols) {
@@ -182,7 +229,7 @@ CT.binance = (function () {
     function connect() {
       if (stopped) return;
       status('connecting');
-      ws = new WebSocket(WS_HOSTS[hostIndex % WS_HOSTS.length]);
+      ws = new WebSocket(hosts[hostIndex % hosts.length]);
       subscribed = [];
       ws.onopen = function () { attempt = 0; status('live'); sync(); };
       ws.onmessage = function (ev) {
@@ -191,7 +238,13 @@ CT.binance = (function () {
         if (!m || m.e !== '24hrMiniTicker') return;
         const last = +m.c;
         const open = +m.o;
-        onTick({ symbol: m.s, price: last, open: open, change: open ? (last - open) / open * 100 : 0, quoteVolume: +m.q });
+        onTick({
+          symbol: toolSymbol(m.s, mk),
+          price: last,
+          open: open,
+          change: open ? (last - open) / open * 100 : 0,
+          quoteVolume: +m.q,
+        });
       };
       ws.onerror = function () { try { ws.close(); } catch (e) { /* ignorieren */ } };
       ws.onclose = function () {
@@ -203,9 +256,13 @@ CT.binance = (function () {
       };
     }
 
-    connect();
     return {
-      set: function (symbols) { wanted = symbols.slice(); sync(); },
+      // Verbindung erst aufbauen, wenn es tatsächlich Symbole dieses Marktes gibt
+      set: function (symbols) {
+        wanted = symbols.slice();
+        if (!started && wanted.length) { started = true; connect(); return; }
+        sync();
+      },
       close: function () {
         stopped = true;
         clearTimeout(timer);
@@ -214,5 +271,8 @@ CT.binance = (function () {
     };
   }
 
-  return { klines, exchangeInfo, ticker24h, streamKlines, streamMiniTickers, MAX_LIMIT };
+  return {
+    klines, exchangeInfo, ticker24h, streamKlines, streamMiniTickers,
+    isFutures, marketOf, rawSymbol, toolSymbol, MAX_LIMIT,
+  };
 })();

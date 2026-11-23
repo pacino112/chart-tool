@@ -19,7 +19,7 @@ CT.watchlist = (function () {
     if (!Array.isArray(arr)) return DEFAULT.slice();
     const out = [];
     arr.forEach(function (s) {
-      const sym = String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const sym = CT.symbols.normalize(s);
       if (sym && out.indexOf(sym) === -1) out.push(sym);
     });
     return out;
@@ -42,11 +42,18 @@ CT.watchlist = (function () {
     return 8;
   }
 
+  /** [Name, Zusatz]: Spot "BTC" + "/USDT", Aktien/Rohstoffe "NVDA" + "Aktie/ETF", Krypto-Perps "BTC" + "/USDT.P" */
   function splitSymbol(sym) {
     const info = CT.symbols.get(sym);
-    if (info) return [info.base, info.quote];
-    const m = sym.match(/^(.+?)(USDT|USDC|FDUSD|BTC|ETH|EUR|TRY|BNB)$/);
-    return m ? [m[1], m[2]] : [sym, ''];
+    if (info) {
+      if (!info.futures) return [info.base, '/' + info.quote];
+      if (info.kind === 'COIN' || info.kind === 'INDEX') return [info.base, '/' + info.quote + '.P'];
+      return [info.base, info.label];
+    }
+    const raw = sym.replace(/\.P$/, '');
+    const m = raw.match(/^(.+?)(USDT|USDC|FDUSD|BTC|ETH|EUR|TRY|BNB)$/);
+    const fut = raw !== sym ? '.P' : '';
+    return m ? [m[1], '/' + m[2] + fut] : [sym, ''];
   }
 
   /* ---------- Darstellung ---------- */
@@ -72,7 +79,8 @@ CT.watchlist = (function () {
         '<button class="wl-del" title="Aus Watchlist entfernen" aria-label="Entfernen">' +
         '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
       row.querySelector('b').textContent = parts[0];
-      row.querySelector('small').textContent = parts[1] ? '/' + parts[1] : '';
+      row.querySelector('small').textContent = parts[1];
+      row.title = sym;
       rowsEl.appendChild(row);
       paint(sym, false);
     });
@@ -222,7 +230,15 @@ CT.watchlist = (function () {
     });
 
     render();
-    stream = CT.binance.streamMiniTickers(onTick);
+    // Je Markt eine Live-Verbindung (Spot und Futures); die Futures-Verbindung öffnet erst, wenn sie gebraucht wird
+    const spot = CT.binance.streamMiniTickers(onTick, null, 'spot');
+    const fut = CT.binance.streamMiniTickers(onTick, null, 'futures');
+    stream = {
+      set: function (symbols) {
+        spot.set(symbols.filter(function (s) { return !CT.binance.isFutures(s); }));
+        fut.set(symbols.filter(CT.binance.isFutures));
+      },
+    };
     stream.set(list);
     refresh();
     // Sobald die Symbolliste da ist: Nachkommastellen und Basis/Quote genau darstellen
