@@ -1,0 +1,352 @@
+/* Chart-Tool – dunkles Layout: Topbar oben, Werkzeuge links, Watchlist rechts */
+:root {
+  --bg: #0e1016;
+  --panel: #131722;
+  --panel-2: #1a1f2c;
+  --border: #242a38;
+  --text: #d1d4dc;
+  --muted: #7d8496;
+  --accent: #2962ff;
+  --accent-soft: rgba(41, 98, 255, 0.18);
+  --up: #26a69a;
+  --down: #ef5350;
+  --warn: #f0b90b;
+  --topbar-h: 44px;
+  --toolbar-w: 46px;
+  --sidebar-w: 260px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: var(--toolbar-w) minmax(0, 1fr) var(--sidebar-w);
+  grid-template-rows: var(--topbar-h) minmax(0, 1fr);
+  grid-template-areas:
+    "top top top"
+    "tools chart side";
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.symbol-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.symbol-btn:hover { background: var(--panel-2); }
+.symbol-btn svg { width: 16px; height: 16px; color: var(--muted); }
+
+.tf-bar {
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  flex: 1 1 auto;
+  border-left: 1px solid var(--border);
+  padding-left: 6px;
+}
+.tf-bar::-webkit-scrollbar { display: none; }
+
+.tf-btn, .tb-btn {
+  height: 30px;
+  min-width: 32px;
+  padding: 0 7px;
+  border-radius: 5px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tf-btn:hover, .tb-btn:hover { background: var(--panel-2); color: var(--text); }
+.tf-btn.active { color: #fff; background: var(--accent-soft); }
+.tb-btn.toggle.active { color: #fff; background: var(--accent-soft); }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 6px;
+}
+
+.status {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin: 0 6px;
+  background: var(--warn);
+}
+.status[data-state="live"] { background: var(--up); box-shadow: 0 0 6px var(--up); }
+.status[data-state="offline"] { background: var(--down); }
+
+/* ---------- Werkzeugleiste links ---------- */
+.toolbar {
+  grid-area: tools;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.tool-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tool-btn:hover { background: var(--panel-2); color: var(--text); }
+.tool-btn.active { color: #fff; background: var(--accent-soft); }
+
+/* ---------- Chart ---------- */
+.chart-wrap {
+  grid-area: chart;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.chart { position: absolute; inset: 0; }
+
+.legend {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  max-width: calc(100% - 90px);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.legend .lg-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.legend .lg-sub { color: var(--muted); }
+.legend .lg-k { color: var(--muted); margin-right: 3px; }
+.legend .up { color: var(--up); }
+.legend .down { color: var(--down); }
+
+.loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  grid-area: side;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+}
+.sidebar-head {
+  padding: 12px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-note { padding: 0 14px; color: var(--muted); }
+
+/* ---------- Symbolsuche ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px 16px;
+}
+.modal[hidden] { display: none; }
+
+.modal-box {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.search-row svg { color: var(--muted); flex-shrink: 0; }
+.search-row input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font-size: 16px; /* verhindert Zoom auf iOS */
+  text-transform: uppercase;
+}
+.search-row input::placeholder { text-transform: none; color: var(--muted); }
+.icon-btn { width: 30px; height: 30px; border-radius: 6px; color: var(--muted); }
+.icon-btn:hover { background: var(--panel-2); color: var(--text); }
+
+.quote-filter {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+}
+.quote-filter button {
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.quote-filter button.active { background: var(--accent); color: #fff; }
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  min-height: 120px;
+  max-height: 60vh;
+}
+.search-results li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.search-results li.active, .search-results li:hover { background: var(--panel-2); }
+.search-results .sr-base { font-weight: 600; }
+.search-results .sr-quote { color: var(--muted); }
+.search-results .sr-tag { margin-left: auto; font-size: 11px; color: var(--muted); }
+.search-results .sr-empty { color: var(--muted); cursor: default; }
+.search-results .sr-section {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: default;
+  padding: 8px 14px 4px;
+}
+.search-results .sr-section:hover { background: none; }
+
+.search-foot {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.toast.error { border-color: var(--down); }
+
+/* ---------- Schmale Bildschirme (Feinschliff in Schritt 5) ---------- */
+@media (max-width: 900px) {
+  #app {
+    grid-template-columns: var(--toolbar-w) minmax(0, 1fr);
+    grid-template-areas:
+      "top top"
+      "tools chart";
+  }
+  .sidebar { display: none; }
+}
+
+@media (max-width: 560px) {
+  :root { --toolbar-w: 40px; }
+  .topbar { padding: 0 4px; gap: 2px; }
+  .symbol-btn { padding: 0 6px; }
+  .symbol-btn svg { display: none; }
+  .tool-btn { width: 32px; height: 32px; }
+  .legend { font-size: 11px; max-width: calc(100% - 70px); }
+  .legend .lg-title { font-size: 13px; }
+}
