@@ -207,11 +207,14 @@ CT.drawings = (function () {
     return { t: Math.round(logicalToTime(Math.round(l))), p: p };
   }
 
+  /** Größe des Kurs-Bereichs (Bereich 0). Indikator-Bereiche darunter gehören nicht zur Zeichenfläche. */
   function paneSize() {
     const api = CT.chart.api;
+    const panes = api.panes();
+    const h = panes.length > 1 ? panes[0].getHeight() : chartEl.clientHeight - api.timeScale().height();
     return {
       w: chartEl.clientWidth - api.priceScale('right').width(),
-      h: chartEl.clientHeight - api.timeScale().height(),
+      h: h,
     };
   }
 
@@ -444,7 +447,7 @@ CT.drawings = (function () {
         chartEl.clientWidth, chartEl.clientHeight, b.length, b.length ? b[0].openTime : 0,
         ts.logicalToCoordinate(0), ts.logicalToCoordinate(1),
         last ? c.priceToCoordinate(last.close) : 0, last ? c.priceToCoordinate(last.close * 1.5) : 0,
-        api.priceScale('right').width(),
+        api.priceScale('right').width(), api.panes()[0].getHeight(),
       ].join('|');
       if (dirty || sig !== lastSig) {
         lastSig = sig;
@@ -902,8 +905,7 @@ CT.drawings = (function () {
   function onKey(e) {
     const t = e.target;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
-    const modal = document.getElementById('searchModal');
-    if (modal && !modal.hidden) return;
+    if (document.querySelector('.modal:not([hidden])')) return;
     const mod = e.ctrlKey || e.metaKey;
 
     if (e.key === 'Escape') {

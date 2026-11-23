@@ -28,7 +28,7 @@ CT.chart = (function () {
   let historyComplete = false;
   let hovering = false;
   let priceDecimals = 2;
-  const listeners = { status: [], loading: [], error: [], price: [], data: [] };
+  const listeners = { status: [], loading: [], error: [], price: [], data: [], tick: [] };
 
   function emit(type, value) { listeners[type].forEach(function (fn) { fn(value); }); }
   function on(type, fn) { listeners[type].push(fn); }
@@ -293,6 +293,7 @@ CT.chart = (function () {
     }
     candles.update(toCandle(bar));
     volume.update(toVolume(bar));
+    emit('tick', bars);
     if (!hovering) renderLegend(bars.length - 1);
     emitPrice();
   }

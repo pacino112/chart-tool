@@ -233,7 +233,7 @@ window.CT = window.CT || {};
 
     document.addEventListener('keydown', function (e) {
       const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
-      if (inField || !$('searchModal').hidden) return;
+      if (inField || document.querySelector('.modal:not([hidden])')) return;
       if (e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); toggleLog(); return; }
       if (e.altKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); CT.chart.resetView(); return; }
       // Wie bei TradingView: einfach lostippen öffnet die Symbolsuche
@@ -268,6 +268,7 @@ window.CT = window.CT || {};
     readHash();
     CT.chart.init($('chart'), $('legend'));
     CT.drawings.init(document.querySelector('.chart-wrap'), $('chart'));
+    CT.indicators.init(document.querySelector('.chart-wrap'));
     bind();
     applyLog();
     open(state.symbol, state.interval);

@@ -30,6 +30,8 @@ js/binance.js     CT.binance – REST (klines, exchangeInfo) und WebSocket mit A
 js/chart.js       CT.chart – Kerzen, Volumen, Legende, Log-Skala, Live-Updates, Historie nachladen
 js/symbols.js     CT.symbols – Symbolliste laden, zwischenspeichern, durchsuchen
 js/drawings.js    CT.drawings – Zeichenwerkzeuge: Canvas-Ebene, Treffer, Ziehen, Eigenschaften, Verlauf, Export
+js/ta.js          CT.ta – Rechenfunktionen wie Pine ta.* (sma, ema, rma, stdev, rsi, stoch, macd, atr, vwap …)
+js/indicators.js  CT.indicators – Indikator-Definitionen (DEFS), Serien/Bereiche, Legenden, Einstellungsfenster
 js/app.js         Verdrahtung: Zeitrahmen, Symbolsuche, Tastenkürzel, URL-Hash, Status
 ```
 
@@ -50,6 +52,13 @@ gezogen wird, ist Verschieben/Zoomen des Charts gesperrt. Punkte werden als `{ t
 Kerzenindex umgerechnet. Außerhalb der Daten wird mit der Kerzenlänge weitergerechnet, so lässt sich auch in die
 Zukunft zeichnen. Achtung: `timeScale().logicalToCoordinate()` kennt nur ganze Indizes, deshalb interpoliert
 `xOf()` selbst. Die Ebene wird nur neu gezeichnet, wenn sich Ansicht, Daten oder Zeichnungen ändern.
+
+**Indikatoren:** Jede Instanz `{ id, type, params, visible, colors }` liegt in `ct.indicators`. Bei strukturellen
+Änderungen (hinzufügen, entfernen, ein/aus, Parameter) baut `rebuild()` alle Indikator-Serien und Unterbereiche
+neu auf. Bei neuen Kerzen (Event `data`) wird alles neu berechnet und gesetzt. Bei Live-Ticks (Event `tick`)
+wird neu berechnet, aber nur der letzte Punkt per `update()` geschrieben. Die Berechnungen arbeiten immer auf allen
+geladenen Kerzen und folgen der Pine-Logik (EMA/RMA mit SMA-Start, Stdev der Grundgesamtheit). Die Werte
+entsprechen damit TradingView, sobald genug Historie geladen ist.
 
 ## Bedienung
 
@@ -72,6 +81,9 @@ Zukunft zeichnen. Achtung: `timeScale().logicalToCoordinate()` kennt nur ganze I
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` (oder `Strg+Umschalt+Z`) |
 | Abbrechen | `Esc` |
 | Sicherung | Pfeil nach unten = Export als JSON, Pfeil nach oben = Import |
+| Indikatoren | Knopf „Indikatoren“ oben oder `/`: hinzufügen, ein/aus, Parameter und Farben ändern |
+| Indikator in der Legende | Maus auf die Zeile: Auge = aus/ein, Zahnrad = Einstellungen, ✕ = entfernen |
+| Bereiche | Trennlinie zwischen Kurs-Chart und Indikator-Bereichen mit der Maus ziehen, um die Höhe zu ändern |
 
 Der Punkt oben rechts zeigt die Live-Verbindung: grün = live, gelb = verbindet, rot = getrennt.
 
@@ -99,11 +111,23 @@ Das Projekt wird in 5 Sitzungen gebaut, pro Sitzung ein Schritt.
   - Getestet: Zeichnen per Ziehen und per Klick-Klick, Verschieben ohne Chart-Mitbewegung, Farbe, Undo/Redo,
     Entf, Zeitrahmenwechsel 1h → 4h → 1D, Symbolwechsel, Neuladen, Import
   - Noch nicht auf einem echten Touch-Gerät getestet → in Schritt 5 (Handy-Ansicht) prüfen
-- [ ] **Schritt 3 – Standard-Indikatoren** *(als Nächstes)*
-  - SMA, EMA, Bollinger-Bänder, VWAP (im Chart); RSI, MACD, Stochastic RSI, ATR (eigene Bereiche darunter); Volumen-MA
-  - Jeder Indikator ein-/ausschaltbar mit eigenen Parametern, Einstellungen speichern (fließen automatisch in die JSON-Sicherung)
-  - Idee: Lightweight Charts v5 kann mehrere Bereiche (`addSeries(…, paneIndex)`) für Oszillatoren
-- [ ] Schritt 4 – Eigene Indikatoren aus den Pine-Dateien (Momentum-Sigma, Pullback-Oszillator, Deviation-Bänder, Weekly MA50)
+- [x] **Schritt 3 – Standard-Indikatoren** *(fertig)*
+  - Im Chart: SMA, EMA, Bollinger-Bänder, VWAP (Neustart je Tag/Woche/Monat, UTC). Auf der Volumen-Skala: Volumen-MA
+  - Eigene Bereiche darunter: RSI (fest 0–100, Linien 70/50/30), MACD (Histogramm in TradingView-Farben),
+    Stochastic RSI (K/D, Linien 80/50/20), ATR
+  - Beliebig viele Instanzen (z. B. EMA 20 + EMA 50 + EMA 200), jede ein-/ausschaltbar, mit eigenen Parametern,
+    Quelle (close/open/high/low/hl2/hlc3/ohlc4) und Farben
+  - Legende pro Indikator mit Werten am Fadenkreuz, Knöpfe für Aus/Ein, Einstellungen, Entfernen
+  - Live-Update mit jeder Kerze. Einstellungen werden gespeichert und sind Teil der JSON-Sicherung
+  - Zeichnungen bleiben auf den Kurs-Bereich beschränkt, wenn Unterbereiche offen sind
+  - Getestet: alle 9 Indikatoren gleichzeitig. SMA, RSI und ATR nachgerechnet (identisch, auch im Live-Betrieb).
+    MACD-Histogramm = MACD − Signal. Parameter ändern, Ein/Aus, Neuladen, Zeitrahmen- und Symbolwechsel
+- [ ] **Schritt 4 – Eigene Indikatoren aus den Pine-Dateien** *(als Nächstes, Pine-Dateien werden angehängt)*
+  - Momentum-Sigma, Pullback-Oszillator mit Strong-Buy-Zone, Deviation-Bänder, Weekly MA50
+  - So geht's: in `js/indicators.js` je einen Eintrag in `DEFS` ergänzen (`params`, `plots`, `calc`, `place`).
+    Rechenbausteine wie Pine `ta.*` liegen in `js/ta.js` (sma, ema, rma, stdev, rsi, stoch, atr, highest, lowest …)
+  - Weekly MA50 braucht Wochenkerzen unabhängig vom Zeitrahmen → eigene Abfrage `CT.binance.klines(symbol, '1w')`
+  - Flächen zwischen Linien (z. B. Strong-Buy-Zone) kann Lightweight Charts nicht direkt → Histogramm/Baseline-Serie oder eigene Canvas
 - [ ] Schritt 5 – Watchlist mit Live-Kurs, Design-Feinschliff, Handy-Ansicht, README
 
 ## Lokal starten
