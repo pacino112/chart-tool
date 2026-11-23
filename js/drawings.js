@@ -335,15 +335,20 @@ CT.drawings = (function () {
         line(P[0], P[1]);
         ctx.restore();
         ctx.font = '11px -apple-system, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        fibLevels(d).forEach(function (lv) {
+        const labels = fibLevels(d).map(function (lv) {
           const price = fibPrice(d, lv);
-          const y = yOf(price);
-          if (y === null) return;
-          line({ x: x1, y: y }, { x: x2, y: y });
+          return { y: yOf(price), text: String(lv) + ' (' + fmt(price) + ')' };
+        });
+        // Beschriftung links vom Fib – passt sie dort nicht hin, innen über die Linie schreiben
+        const widest = labels.reduce(function (w, l) { return Math.max(w, ctx.measureText(l.text).width); }, 0);
+        const inside = x1 - 6 - widest < 2;
+        ctx.textAlign = inside ? 'left' : 'right';
+        labels.forEach(function (l) {
+          if (l.y === null) return;
+          line({ x: x1, y: l.y }, { x: x2, y: l.y });
           ctx.fillStyle = d.color;
-          ctx.fillText(String(lv) + ' (' + fmt(price) + ')', x1 - 6, y);
+          ctx.fillText(l.text, inside ? x1 + 4 : x1 - 6, inside ? l.y - 8 : l.y);
         });
         break;
       }

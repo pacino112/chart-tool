@@ -137,5 +137,82 @@ CT.binance = (function () {
     };
   }
 
-  return { klines, exchangeInfo, streamKlines, MAX_LIMIT };
+  /** 24-Stunden-Statistik für mehrere Symbole in einer Anfrage. */
+  async function ticker24h(symbols) {
+    if (!symbols.length) return [];
+    const data = await request('/api/v3/ticker/24hr', { symbols: JSON.stringify(symbols), type: 'MINI' });
+    return data.map(function (t) {
+      const last = +t.lastPrice;
+      const open = +t.openPrice;
+      return { symbol: t.symbol, price: last, open: open, change: open ? (last - open) / open * 100 : 0, quoteVolume: +t.quoteVolume };
+    });
+  }
+
+  /**
+   * Live-Kurse (rollierende 24 h) für eine veränderliche Liste von Symbolen über EINE Verbindung.
+   * Nutzt SUBSCRIBE/UNSUBSCRIBE, damit beim Ändern der Watchlist nicht neu verbunden werden muss.
+   * Rückgabe: { set(symbols), close() }
+   */
+  function streamMiniTickers(onTick, onStatus) {
+    let ws = null;
+    let wanted = [];
+    let subscribed = [];
+    let stopped = false;
+    let attempt = 0;
+    let hostIndex = 0;
+    let timer = null;
+    let reqId = 1;
+
+    function name(s) { return s.toLowerCase() + '@miniTicker'; }
+    function status(s) { if (onStatus) onStatus(s); }
+
+    function send(method, symbols) {
+      if (!ws || ws.readyState !== 1 || !symbols.length) return;
+      ws.send(JSON.stringify({ method: method, params: symbols.map(name), id: reqId++ }));
+    }
+
+    function sync() {
+      const add = wanted.filter(function (s) { return subscribed.indexOf(s) === -1; });
+      const del = subscribed.filter(function (s) { return wanted.indexOf(s) === -1; });
+      send('UNSUBSCRIBE', del);
+      send('SUBSCRIBE', add);
+      if (ws && ws.readyState === 1) subscribed = wanted.slice();
+    }
+
+    function connect() {
+      if (stopped) return;
+      status('connecting');
+      ws = new WebSocket(WS_HOSTS[hostIndex % WS_HOSTS.length]);
+      subscribed = [];
+      ws.onopen = function () { attempt = 0; status('live'); sync(); };
+      ws.onmessage = function (ev) {
+        let m;
+        try { m = JSON.parse(ev.data); } catch (e) { return; }
+        if (!m || m.e !== '24hrMiniTicker') return;
+        const last = +m.c;
+        const open = +m.o;
+        onTick({ symbol: m.s, price: last, open: open, change: open ? (last - open) / open * 100 : 0, quoteVolume: +m.q });
+      };
+      ws.onerror = function () { try { ws.close(); } catch (e) { /* ignorieren */ } };
+      ws.onclose = function () {
+        if (stopped) return;
+        status('offline');
+        attempt++;
+        if (attempt % 2 === 0) hostIndex++;
+        timer = setTimeout(connect, Math.min(30000, 1000 * Math.pow(2, Math.min(attempt, 5))));
+      };
+    }
+
+    connect();
+    return {
+      set: function (symbols) { wanted = symbols.slice(); sync(); },
+      close: function () {
+        stopped = true;
+        clearTimeout(timer);
+        if (ws) { ws.onclose = null; try { ws.close(); } catch (e) { /* ignorieren */ } }
+      },
+    };
+  }
+
+  return { klines, exchangeInfo, ticker24h, streamKlines, streamMiniTickers, MAX_LIMIT };
 })();

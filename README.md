@@ -6,6 +6,21 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
 
 **Live:** https://pacino112.github.io/chart-tool/
 
+![Chart-Tool: BTCUSDT 4h mit EMA 21/200, Fibonacci, RSI, MACD und Watchlist](docs/screenshot.jpg)
+
+## Funktionen
+
+- **Chart:** Kerzen und Volumen live von Binance, 15 Zeitrahmen (1m bis 1M), unbegrenzte Historie beim
+  Zurückscrollen, Fadenkreuz mit OHLC, Log-Skala, Symbolsuche über alle Binance-Spot-Paare
+- **Zeichnen:** Trendlinie, Strahl, horizontale/vertikale Linie, Rechteck, Text, Fibonacci mit eigenen Levels
+  (inkl. 0.886), Messwerkzeug. Verschieben, Farbe, Rückgängig/Wiederholen. Pro Symbol gespeichert, auf allen Zeitrahmen sichtbar
+- **Indikatoren:** SMA, EMA, Bollinger, VWAP, Volumen-MA, RSI, MACD, Stochastic RSI, ATR, beliebig viele
+  mit eigenen Parametern und Farben
+- **Watchlist:** Live-Kurs und 24h-Veränderung, hinzufügen per Stern oder „+“, sortieren per Ziehen
+- **Speichern:** alles im Browser, dazu Sicherung als JSON exportieren/importieren
+- **Handy:** bedienbar per Touch, Watchlist als Schublade
+- **Ohne Abo, ohne Limits:** keine Anmeldung, kein Server, keine Begrenzung bei Zeichnungen, Indikatoren oder Watchlist
+
 ## Technik
 
 - **Kein Server, kein Build-Prozess** – `index.html` öffnen und loslegen (auch direkt per Doppelklick).
@@ -14,6 +29,8 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
 - **Daten:** öffentliche Binance-API ohne Schlüssel
   - Kerzen über REST: `/api/v3/klines` (1000 Kerzen pro Abruf, ältere werden beim Scrollen nach links unbegrenzt nachgeladen)
   - Live-Kerze über WebSocket: `<symbol>@kline_<interval>`
+  - Watchlist: Startwerte über `/api/v3/ticker/24hr`, live über eine WebSocket-Verbindung mit `<symbol>@miniTicker`
+    (Symbole werden per `SUBSCRIBE`/`UNSUBSCRIBE` an- und abgemeldet, ohne neu zu verbinden)
   - Symbolliste: `/api/v3/exchangeInfo` (24 h im Browser zwischengespeichert)
   - Ausweich-Server, falls `api.binance.com` nicht erreichbar oder gesperrt ist: `data-api.binance.vision` / `data-stream.binance.vision`
 - **Speichern:** `localStorage` (Präfix `ct.`). Zeichnungen pro Symbol unter `ct.drawings.<SYMBOL>`.
@@ -32,7 +49,9 @@ js/symbols.js     CT.symbols – Symbolliste laden, zwischenspeichern, durchsuch
 js/drawings.js    CT.drawings – Zeichenwerkzeuge: Canvas-Ebene, Treffer, Ziehen, Eigenschaften, Verlauf, Export
 js/ta.js          CT.ta – Rechenfunktionen wie Pine ta.* (sma, ema, rma, stdev, rsi, stoch, macd, atr, vwap …)
 js/indicators.js  CT.indicators – Indikator-Definitionen (DEFS), Serien/Bereiche, Legenden, Einstellungsfenster
-js/app.js         Verdrahtung: Zeitrahmen, Symbolsuche, Tastenkürzel, URL-Hash, Status
+js/watchlist.js   CT.watchlist – Watchlist: Live-Kurse, 24h-Veränderung, hinzufügen/entfernen/sortieren
+js/app.js         Verdrahtung: Zeitrahmen, Symbolsuche, Watchlist/Seitenleiste, Tastenkürzel, URL-Hash, Status
+docs/             Screenshot für die README
 ```
 
 Alle Module hängen am globalen Objekt `window.CT` und werden als normale `<script>`-Dateien geladen
@@ -84,12 +103,21 @@ entsprechen damit TradingView, sobald genug Historie geladen ist.
 | Indikatoren | Knopf „Indikatoren“ oben oder `/`: hinzufügen, ein/aus, Parameter und Farben ändern |
 | Indikator in der Legende | Maus auf die Zeile: Auge = aus/ein, Zahnrad = Einstellungen, ✕ = entfernen |
 | Bereiche | Trennlinie zwischen Kurs-Chart und Indikator-Bereichen mit der Maus ziehen, um die Höhe zu ändern |
+| Watchlist | Zeile anklicken = Symbol öffnen, ✕ = entfernen, Zeile ziehen = Reihenfolge ändern |
+| Zur Watchlist | Stern neben dem Symbol oben, Stern in der Symbolsuche oder „+“ in der Watchlist |
+| Watchlist durchblättern | Pfeil hoch / runter |
+| Watchlist ein-/ausblenden | Knopf ganz rechts oben oder `Alt+W` (am Handy öffnet er die Schublade) |
 
-Der Punkt oben rechts zeigt die Live-Verbindung: grün = live, gelb = verbindet, rot = getrennt.
+Der Punkt oben rechts zeigt die Live-Verbindung des Charts: grün = live, gelb = verbindet, rot = getrennt.
+
+**Am Handy:** Zeichnen mit dem Finger (Werkzeug wählen, dann ziehen oder zweimal tippen). Die Eigenschaftsleiste
+einer ausgewählten Zeichnung erscheint unten. Die Knöpfe in der Indikator-Legende und das ✕ in der Watchlist sind
+auf Touch-Geräten immer sichtbar.
 
 ## Fortschritt
 
-Das Projekt wird in 5 Sitzungen gebaut, pro Sitzung ein Schritt.
+Das Projekt wird in 5 Sitzungen gebaut, pro Sitzung ein Schritt. Schritt 5 wurde vorgezogen, weil die
+Pine-Dateien für Schritt 4 noch fehlen. **Offen ist damit nur noch Schritt 4.**
 
 - [x] **Schritt 1 – Grundgerüst, Chart, Binance-Daten, Zeitrahmen, Symbolsuche** *(fertig)*
   - Layout mit Topbar, Werkzeugleiste links (Platzhalter), Watchlist rechts (Platzhalter)
@@ -110,7 +138,7 @@ Das Projekt wird in 5 Sitzungen gebaut, pro Sitzung ein Schritt.
   - JSON-Sicherung: Export und Import (ungültige Einträge werden beim Laden aussortiert)
   - Getestet: Zeichnen per Ziehen und per Klick-Klick, Verschieben ohne Chart-Mitbewegung, Farbe, Undo/Redo,
     Entf, Zeitrahmenwechsel 1h → 4h → 1D, Symbolwechsel, Neuladen, Import
-  - Noch nicht auf einem echten Touch-Gerät getestet → in Schritt 5 (Handy-Ansicht) prüfen
+  - Touch in Schritt 5 in der Handy-Emulation geprüft (siehe dort)
 - [x] **Schritt 3 – Standard-Indikatoren** *(fertig)*
   - Im Chart: SMA, EMA, Bollinger-Bänder, VWAP (Neustart je Tag/Woche/Monat, UTC). Auf der Volumen-Skala: Volumen-MA
   - Eigene Bereiche darunter: RSI (fest 0–100, Linien 70/50/30), MACD (Histogramm in TradingView-Farben),
@@ -122,13 +150,25 @@ Das Projekt wird in 5 Sitzungen gebaut, pro Sitzung ein Schritt.
   - Zeichnungen bleiben auf den Kurs-Bereich beschränkt, wenn Unterbereiche offen sind
   - Getestet: alle 9 Indikatoren gleichzeitig. SMA, RSI und ATR nachgerechnet (identisch, auch im Live-Betrieb).
     MACD-Histogramm = MACD − Signal. Parameter ändern, Ein/Aus, Neuladen, Zeitrahmen- und Symbolwechsel
-- [ ] **Schritt 4 – Eigene Indikatoren aus den Pine-Dateien** *(als Nächstes, Pine-Dateien werden angehängt)*
+- [ ] **Schritt 4 – Eigene Indikatoren aus den Pine-Dateien** *(als Nächstes, wartet auf die Pine-Dateien)*
   - Momentum-Sigma, Pullback-Oszillator mit Strong-Buy-Zone, Deviation-Bänder, Weekly MA50
   - So geht's: in `js/indicators.js` je einen Eintrag in `DEFS` ergänzen (`params`, `plots`, `calc`, `place`).
     Rechenbausteine wie Pine `ta.*` liegen in `js/ta.js` (sma, ema, rma, stdev, rsi, stoch, atr, highest, lowest …)
   - Weekly MA50 braucht Wochenkerzen unabhängig vom Zeitrahmen → eigene Abfrage `CT.binance.klines(symbol, '1w')`
   - Flächen zwischen Linien (z. B. Strong-Buy-Zone) kann Lightweight Charts nicht direkt → Histogramm/Baseline-Serie oder eigene Canvas
-- [ ] Schritt 5 – Watchlist mit Live-Kurs, Design-Feinschliff, Handy-Ansicht, README
+- [x] **Schritt 5 – Watchlist, Design, Handy-Ansicht, README** *(fertig, vorgezogen)*
+  - Watchlist rechts: Live-Kurs mit kurzem Aufblinken bei Änderung, 24h-Veränderung in %, beliebig viele Symbole
+  - Hinzufügen über Stern (neben dem Symbol und in der Suche) oder „+“ (Suche im Hinzufügen-Modus),
+    entfernen per ✕, Reihenfolge per Ziehen, Pfeil hoch/runter blättert durch die Liste
+  - Seitenleiste am Desktop ausblendbar (gespeichert), am Handy als Schublade von rechts
+  - Handy: Browser-Gesten auf dem Chart aus (`touch-action: none`), Safe-Areas für Notch, größere Zeilen,
+    Eigenschaftsleiste unten, Hover-Knöpfe auf Touch-Geräten immer sichtbar
+  - Favicon, Fußzeile mit Quellen und Links, Fibonacci-Beschriftung rutscht nach innen, wenn links kein Platz ist
+  - README mit Funktionsübersicht und Screenshot
+  - Getestet: Watchlist (Live-Updates, Klick, Pfeiltasten, Stern, „+“, Speichern, Ein-/Ausblenden) in Chrome;
+    Handy-Ansicht 375 × 812 mit Touch-Emulation: Schublade, Symbol öffnen, Trendlinie per Touch ziehen
+  - Nicht getestet: echtes iPhone/Android-Gerät, Sortieren per Ziehen (HTML-Drag-and-Drop lässt sich automatisiert
+    nicht zuverlässig auslösen) → einmal selbst ausprobieren
 
 ## Lokal starten
 

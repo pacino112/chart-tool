@@ -12,6 +12,7 @@ window.CT = window.CT || {};
     interval: CT.store.get('interval', '1h'),
     log: CT.store.get('log', false),
     recent: CT.store.get('recent', []),
+    sideHidden: CT.store.get('sideHidden', false),
   };
 
   /* ---------- Hilfen ---------- */
@@ -55,6 +56,8 @@ window.CT = window.CT || {};
     $('symbolLabel').textContent = symbol;
     renderTfBar();
     CT.drawings.setSymbol(symbol);
+    CT.watchlist.setActive(symbol);
+    updateStar();
     const ok = await CT.chart.load(symbol, interval, CT.symbols.get(symbol));
     if (ok) {
       lastGood = symbol;
@@ -65,6 +68,33 @@ window.CT = window.CT || {};
       const fallback = lastGood || 'BTCUSDT';
       if (fallback !== symbol) open(fallback, interval);
     }
+  }
+
+  /* ---------- Watchlist & Seitenleiste ---------- */
+  function updateStar() {
+    const on = CT.watchlist.has(state.symbol);
+    $('starBtn').classList.toggle('active', on);
+    $('starBtn').setAttribute('aria-pressed', on);
+    $('starBtn').title = on ? 'Aus Watchlist entfernen' : 'Zur Watchlist hinzufügen';
+  }
+
+  const mobileQuery = window.matchMedia('(max-width: 900px)');
+
+  /** Desktop: Seitenleiste ein-/ausblenden (gespeichert). Handy: als Schublade über dem Chart. */
+  function toggleSide(force) {
+    if (mobileQuery.matches) {
+      const open = force !== undefined ? force : !document.body.classList.contains('side-open');
+      document.body.classList.toggle('side-open', open);
+    } else {
+      state.sideHidden = force !== undefined ? !force : !state.sideHidden;
+      $('app').classList.toggle('no-side', state.sideHidden);
+      CT.store.set('sideHidden', state.sideHidden);
+    }
+  }
+
+  function openFromWatchlist(symbol) {
+    if (mobileQuery.matches) toggleSide(false);
+    if (symbol !== state.symbol) open(symbol, state.interval);
   }
 
   /* ---------- Zeitrahmen ---------- */
@@ -105,12 +135,17 @@ window.CT = window.CT || {};
   }
 
   /* ---------- Symbolsuche ---------- */
-  const search = { quote: CT.store.get('searchQuote', 'ALL'), items: [], active: 0 };
+  // mode 'open' = Symbol öffnen, 'add' = zur Watchlist hinzufügen
+  const search = { quote: CT.store.get('searchQuote', 'ALL'), items: [], active: 0, mode: 'open' };
 
-  function openSearch(initial) {
+  function openSearch(initial, mode) {
+    search.mode = mode || 'open';
     $('searchModal').hidden = false;
     const input = $('searchInput');
     input.value = initial || '';
+    input.placeholder = search.mode === 'add'
+      ? 'Zur Watchlist hinzufügen, z. B. SOL, LINKUSDT'
+      : 'Symbol suchen, z. B. BTC, ETHUSDT, SOL';
     renderQuoteFilter();
     input.focus();
     renderResults();
@@ -160,10 +195,19 @@ window.CT = window.CT || {};
       li.setAttribute('role', 'option');
       const base = info.base || info.symbol;
       const quote = info.quote ? '/' + info.quote : '';
-      li.innerHTML = '<span class="sr-base"></span><span class="sr-quote"></span><span class="sr-tag"></span>';
+      li.innerHTML = '<span class="sr-base"></span><span class="sr-quote"></span><span class="sr-tag"></span>' +
+        '<button class="sr-star" title="Watchlist"><svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg></button>';
       li.children[0].textContent = base;
       li.children[1].textContent = quote;
       li.children[2].textContent = tag || 'Spot';
+      const star = li.querySelector('.sr-star');
+      star.classList.toggle('on', CT.watchlist.has(info.symbol));
+      star.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const on = CT.watchlist.toggle(info.symbol);
+        star.classList.toggle('on', on);
+        updateStar();
+      });
       const idx = search.items.length;
       li.addEventListener('mousemove', function () { setActive(idx); });
       li.addEventListener('click', function () { choose(idx); });
@@ -212,6 +256,12 @@ window.CT = window.CT || {};
     else symbol = $('searchInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!symbol) return;
     closeSearch();
+    if (search.mode === 'add') {
+      if (CT.watchlist.add(symbol)) toast(symbol + ' zur Watchlist hinzugefügt');
+      else toast(symbol + ' ist schon in der Watchlist');
+      updateStar();
+      return;
+    }
     open(symbol, state.interval);
   }
 
@@ -230,12 +280,28 @@ window.CT = window.CT || {};
 
     $('logBtn').addEventListener('click', toggleLog);
     $('resetBtn').addEventListener('click', function () { CT.chart.resetView(); });
+    $('starBtn').addEventListener('click', function () {
+      const on = CT.watchlist.toggle(state.symbol);
+      updateStar();
+      toast(state.symbol + (on ? ' zur Watchlist hinzugefügt' : ' aus der Watchlist entfernt'));
+    });
+    $('wlBtn').addEventListener('click', function () { toggleSide(); });
+    $('wlAdd').addEventListener('click', function () { openSearch('', 'add'); });
+    $('sideBackdrop').addEventListener('click', function () { toggleSide(false); });
+    mobileQuery.addEventListener('change', function () { document.body.classList.remove('side-open'); });
 
     document.addEventListener('keydown', function (e) {
       const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
       if (inField || document.querySelector('.modal:not([hidden])')) return;
       if (e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); toggleLog(); return; }
       if (e.altKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); CT.chart.resetView(); return; }
+      if (e.altKey && (e.key === 'w' || e.key === 'W')) { e.preventDefault(); toggleSide(); return; }
+      // Pfeil hoch/runter: vorheriges/nächstes Symbol der Watchlist
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const next = CT.watchlist.step(e.key === 'ArrowUp' ? -1 : 1);
+        if (next) { e.preventDefault(); openFromWatchlist(next); }
+        return;
+      }
       // Wie bei TradingView: einfach lostippen öffnet die Symbolsuche
       if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[a-zA-Z0-9]$/.test(e.key)) {
         e.preventDefault();
@@ -269,6 +335,8 @@ window.CT = window.CT || {};
     CT.chart.init($('chart'), $('legend'));
     CT.drawings.init(document.querySelector('.chart-wrap'), $('chart'));
     CT.indicators.init(document.querySelector('.chart-wrap'));
+    CT.watchlist.init({ onOpen: openFromWatchlist });
+    $('app').classList.toggle('no-side', state.sideHidden);
     bind();
     applyLog();
     open(state.symbol, state.interval);

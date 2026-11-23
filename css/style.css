@@ -273,19 +273,123 @@ svg {
   color: var(--muted);
 }
 
-/* ---------- Sidebar ---------- */
+/* ---------- Seitenleiste / Watchlist ---------- */
+#app.no-side {
+  grid-template-columns: var(--toolbar-w) minmax(0, 1fr) 0;
+}
+#app.no-side .sidebar { display: none; }
+
 .sidebar {
   grid-area: side;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--panel);
   border-left: 1px solid var(--border);
-  overflow-y: auto;
 }
 .sidebar-head {
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 14px;
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
-.sidebar-note { padding: 0 14px; color: var(--muted); }
+.sidebar-head .icon-btn { display: flex; align-items: center; justify-content: center; }
+.wl-count { margin-left: 4px; font-weight: 400; color: var(--muted); font-size: 12px; }
+
+.wl-cols, .wl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 64px 22px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 14px;
+}
+.wl-cols {
+  height: 26px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.wl-cols span:nth-child(2), .wl-cols span:nth-child(3) { text-align: right; }
+.wl-cols::after { content: ""; }
+
+.wl-rows { flex: 1; overflow-y: auto; min-height: 0; padding: 2px 0; }
+.wl-row {
+  height: 38px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  border-left: 2px solid transparent;
+  padding-left: 12px;
+  outline: none;
+}
+.wl-row:hover, .wl-row:focus-visible { background: var(--panel-2); }
+.wl-row.active { background: var(--accent-soft); border-left-color: var(--accent); }
+.wl-row.invalid { opacity: 0.45; }
+.wl-row.dragging { opacity: 0.4; }
+.wl-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.wl-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.wl-sym { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-sym b { font-weight: 600; }
+.wl-sym small { color: var(--muted); font-size: 11px; margin-left: 1px; }
+.wl-price { text-align: right; border-radius: 3px; padding: 1px 3px; }
+.wl-chg { text-align: right; font-size: 12px; }
+.wl-chg.up { color: var(--up); }
+.wl-chg.down { color: var(--down); }
+.wl-price.flash-up { animation: flash-up 0.7s ease-out; }
+.wl-price.flash-down { animation: flash-down 0.7s ease-out; }
+@keyframes flash-up { from { background: rgba(38, 166, 154, 0.45); } to { background: transparent; } }
+@keyframes flash-down { from { background: rgba(239, 83, 80, 0.45); } to { background: transparent; } }
+.wl-del {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+}
+.wl-del svg { width: 13px; height: 13px; }
+.wl-row:hover .wl-del { visibility: visible; }
+.wl-del:hover { color: var(--down); background: var(--bg); }
+.wl-empty { padding: 12px 14px; color: var(--muted); }
+
+.side-foot {
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.side-foot p { margin: 2px 0; }
+.side-foot a { color: var(--text); text-decoration: none; }
+.side-foot a:hover { color: #fff; text-decoration: underline; }
+.side-note { opacity: 0.7; }
+.side-backdrop { display: none; }
+
+/* Stern neben dem Symbol */
+.star-btn { min-width: 30px; padding: 0 4px; }
+.star-btn svg { width: 16px; height: 16px; }
+.star-btn.active { color: var(--warn); }
+.star-btn.active svg { fill: var(--warn); }
+.search-results .sr-tag { margin-left: auto; }
+.sr-star {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sr-star svg { width: 15px; height: 15px; }
+.sr-star:hover { color: var(--text); background: var(--bg); }
+.sr-star.on { color: var(--warn); }
+.sr-star.on svg { fill: var(--warn); }
+
+/* Chart: Browser-Gesten (Seite zoomen/scrollen) abschalten, der Chart regelt Touch selbst */
+.chart-wrap { touch-action: none; -webkit-user-select: none; user-select: none; }
 
 /* ---------- Symbolsuche ---------- */
 .modal {
@@ -406,25 +510,65 @@ svg {
 }
 .toast.error { border-color: var(--down); }
 
-/* ---------- Schmale Bildschirme (Feinschliff in Schritt 5) ---------- */
+/* ---------- Schmale Bildschirme / Handy ---------- */
+/* Notch/Home-Indikator bei iPhones berücksichtigen */
+.topbar { padding-top: env(safe-area-inset-top); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+#app { grid-template-rows: calc(var(--topbar-h) + env(safe-area-inset-top)) minmax(0, 1fr); }
+.toolbar { padding-bottom: calc(6px + env(safe-area-inset-bottom)); padding-left: env(safe-area-inset-left); }
+
 @media (max-width: 900px) {
-  #app {
+  #app, #app.no-side {
     grid-template-columns: var(--toolbar-w) minmax(0, 1fr);
     grid-template-areas:
       "top top"
       "tools chart";
   }
-  .sidebar { display: none; }
+  /* Watchlist als Schublade von rechts */
+  .sidebar, #app.no-side .sidebar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(320px, 86vw);
+    padding-top: env(safe-area-inset-top);
+    transform: translateX(105%);
+    transition: transform 0.2s ease;
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.5);
+  }
+  body.side-open .sidebar { transform: none; }
+  body.side-open .side-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .wl-row { height: 44px; }
 }
 
 @media (max-width: 560px) {
   :root { --toolbar-w: 40px; }
-  .topbar { padding: 0 4px; gap: 2px; }
+  .topbar { gap: 2px; padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
   .symbol-btn { padding: 0 6px; }
   .symbol-btn svg { display: none; }
-  .tool-btn { width: 32px; height: 32px; }
+  .star-btn { min-width: 26px; padding: 0 2px; }
+  .tf-btn { min-width: 30px; padding: 0 5px; }
+  .tb-btn { min-width: 30px; padding: 0 5px; }
+  #resetBtn { display: none; }
+  .tool-btn { width: 34px; height: 34px; }
   .legend { font-size: 11px; max-width: calc(100% - 70px); }
   .legend .lg-title { font-size: 13px; }
+  .modal { padding: 12px 8px; }
+  .draw-props { top: auto; bottom: 34px; max-width: calc(100% - 16px); }
+}
+
+/* Touch-Geräte ohne Maus: Knöpfe, die sonst erst beim Überfahren erscheinen, immer zeigen */
+@media (hover: none) {
+  .wl-del { visibility: visible; }
+  .il-row .il-btns { display: flex; }
+  .il-row { background: rgba(19, 23, 34, 0.6); }
 }
 
 /* ---------- Indikatoren: Legende ---------- */
