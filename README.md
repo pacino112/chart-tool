@@ -33,10 +33,12 @@ js/app.js         Verdrahtung: Zeitrahmen, Symbolsuche, Tastenkürzel, URL-Hash,
 Alle Module hängen am globalen Objekt `window.CT` und werden als normale `<script>`-Dateien geladen
 (keine ES-Module), damit das Tool auch ohne Webserver per `file://` läuft.
 
-**Zeitstempel:** Lightweight Charts rechnet in UTC. `CT.chart.toChartTime(ms)` verschiebt Intraday-Kerzen
-in die Ortszeit (Tages-/Wochen-/Monatskerzen bleiben unverschoben). Zeichnungen und Indikatoren
-sollen intern immer echte UTC-Millisekunden (`openTime`) speichern und nur zur Anzeige umrechnen
-(`toChartTime` / `fromChartTime`).
+**Zeitstempel:** Die Chart-Zeit ist immer echte UTC-Zeit in Sekunden (`toChartTime(ms)` = `ms / 1000`).
+Die Ortszeit entsteht nur bei der Anzeige über `timeFormatter` und `tickMarkFormatter`
+(Tages-/Wochen-/Monatskerzen werden in UTC formatiert, damit das Datum stimmt).
+Zeiten nie pro Kerze in Ortszeit verschieben: Bei der Zeitumstellung entstehen sonst doppelte
+Zeitstempel, und Lightweight Charts zeichnet gar nichts mehr. Zeichnungen und Indikatoren speichern
+echte UTC-Millisekunden (`openTime`) und rechnen mit `toChartTime` / `fromChartTime` um.
 
 ## Bedienung
 

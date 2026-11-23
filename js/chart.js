@@ -34,24 +34,60 @@ CT.chart = (function () {
   function on(type, fn) { listeners[type].push(fn); }
 
   /* ---------- Zeit ----------
-     Lightweight Charts zeigt Zeiten als UTC. Damit Intraday-Kerzen in Ortszeit erscheinen,
-     wird der Zeitzonen-Versatz addiert. Tages-, Wochen- und Monatskerzen bleiben unverschoben,
-     damit das Datum stimmt. Zeichnungen (Schritt 2) speichern echte UTC-Millisekunden
-     und rechnen mit toChartTime/fromChartTime um. */
+     Die Chart-Zeit ist immer echte UTC-Zeit in Sekunden (openTime / 1000).
+     Die Ortszeit entsteht nur bei der Anzeige (timeFormatter / tickMarkFormatter).
+     Wichtig: Zeiten NICHT pro Kerze in Ortszeit verschieben – bei der Zeitumstellung
+     entstünden doppelte Zeitstempel, und Lightweight Charts zeichnet dann nichts mehr.
+     Tages-, Wochen- und Monatskerzen werden in UTC formatiert, damit das Datum stimmt. */
   function isDailyOrMore(interval) { return !!DAILY_OR_MORE[interval]; }
 
-  function toChartTime(ms, interval) {
-    const iv = interval || current.interval;
-    const sec = Math.floor(ms / 1000);
-    return isDailyOrMore(iv) ? sec : sec - new Date(ms).getTimezoneOffset() * 60;
+  function toChartTime(ms) {
+    return Math.floor(ms / 1000);
   }
 
-  function fromChartTime(t, interval) {
-    const iv = interval || current.interval;
-    if (isDailyOrMore(iv)) return t * 1000;
-    // Versatz am ungefähren Zeitpunkt bestimmen (Sommer-/Winterzeit)
-    const approx = t * 1000;
-    return approx + new Date(approx).getTimezoneOffset() * 60000;
+  function fromChartTime(t) {
+    return t * 1000;
+  }
+
+  function dtf(opts, utc) {
+    return new Intl.DateTimeFormat('de-DE', utc ? Object.assign({ timeZone: 'UTC' }, opts) : opts);
+  }
+  const FMT = {
+    local: {
+      full: dtf({ weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      year: dtf({ year: 'numeric' }),
+      month: dtf({ month: 'short' }),
+      day: dtf({ day: 'numeric' }),
+      time: dtf({ hour: '2-digit', minute: '2-digit' }),
+      seconds: dtf({ hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    },
+    utc: {
+      full: dtf({ weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' }, true),
+      monthFull: dtf({ month: 'short', year: 'numeric' }, true),
+      year: dtf({ year: 'numeric' }, true),
+      month: dtf({ month: 'short' }, true),
+      day: dtf({ day: 'numeric' }, true),
+    },
+  };
+
+  /** Zeit im Fadenkreuz */
+  function formatCrosshairTime(t) {
+    const d = new Date(t * 1000);
+    if (current.interval === '1M') return FMT.utc.monthFull.format(d);
+    return isDailyOrMore(current.interval) ? FMT.utc.full.format(d) : FMT.local.full.format(d);
+  }
+
+  /** Beschriftung der Zeitachse (TickMarkType: 0 Jahr, 1 Monat, 2 Tag, 3 Zeit, 4 Zeit mit Sekunden) */
+  function formatTickMark(t, type) {
+    const d = new Date(t * 1000);
+    const f = isDailyOrMore(current.interval) ? FMT.utc : FMT.local;
+    switch (type) {
+      case 0: return f.year.format(d);
+      case 1: return f.month.format(d);
+      case 2: return f.day.format(d);
+      case 4: return FMT.local.seconds.format(d);
+      default: return FMT.local.time.format(d);
+    }
   }
 
   function toCandle(b) {
@@ -146,8 +182,14 @@ CT.chart = (function () {
         horzLine: { color: '#5d6478', labelBackgroundColor: '#2a3040' },
       },
       rightPriceScale: { borderColor: COLORS.border, scaleMargins: { top: 0.08, bottom: 0.22 } },
-      timeScale: { borderColor: COLORS.border, timeVisible: true, secondsVisible: false, rightOffset: 8 },
-      localization: { locale: 'de-DE' },
+      timeScale: {
+        borderColor: COLORS.border,
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 8,
+        tickMarkFormatter: formatTickMark,
+      },
+      localization: { locale: 'de-DE', timeFormatter: formatCrosshairTime },
     });
 
     candles = chart.addSeries(LC.CandlestickSeries, {
