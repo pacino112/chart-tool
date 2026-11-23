@@ -220,9 +220,52 @@ CT.drawings = (function () {
   /** Bildschirmposition → Punkt, Zeit auf die nächste Kerze eingerastet. */
   function pointAt(pos) {
     const l = logicalAt(pos.x);
-    const p = priceAt(pos.y);
+    let p = priceAt(pos.y);
     if (l === null || p === null || !isFinite(p)) return null;
-    return { t: Math.round(logicalToTime(Math.round(l))), p: p };
+    const idx = Math.round(l);
+    p = snapPrice(idx, pos.y, p);
+    return { t: Math.round(logicalToTime(idx)), p: p };
+  }
+
+  /* ---------- Magnet ----------
+     'weak' = rastet nur ein, wenn Open/High/Low/Close der Kerze unter dem Mauszeiger nah genug ist,
+     'strong' = rastet immer auf den nächsten dieser vier Werte ein. Strg gedrückt halten schaltet vorübergehend um. */
+  const MAGNET_MODES = ['off', 'weak', 'strong'];
+  const MAGNET_PX = 18;
+  let magnet = MAGNET_MODES.indexOf(CT.store.get('magnet', 'off')) !== -1 ? CT.store.get('magnet', 'off') : 'off';
+  let ctrlHeld = false;
+
+  function effectiveMagnet() {
+    if (!ctrlHeld) return magnet;
+    return magnet === 'off' ? 'strong' : 'off';
+  }
+
+  function snapPrice(idx, y, price) {
+    const mode = effectiveMagnet();
+    const b = bars()[idx];
+    if (mode === 'off' || !b) return price;
+    let best = price;
+    let bestDist = Infinity;
+    [b.open, b.high, b.low, b.close].forEach(function (v) {
+      const vy = yOf(v);
+      if (vy === null) return;
+      const dist = Math.abs(vy - y);
+      if (dist < bestDist) { bestDist = dist; best = v; }
+    });
+    if (mode === 'weak' && bestDist > MAGNET_PX) return price;
+    return best;
+  }
+
+  function setMagnet(mode) {
+    magnet = mode;
+    CT.store.set('magnet', mode);
+    const btn = document.querySelector('[data-action="magnet"]');
+    if (btn) {
+      btn.classList.toggle('active', mode !== 'off');
+      btn.dataset.mode = mode;
+      btn.title = 'Magnet: ' + { off: 'aus', weak: 'schwach (rastet in der Nähe von O/H/L/C ein)', strong: 'stark (rastet immer auf O/H/L/C ein)' }[mode] +
+        ' – Klick wechselt, Strg halten schaltet vorübergehend um';
+    }
   }
 
   /** Größe des Kurs-Bereichs (Bereich 0). Indikator-Bereiche darunter gehören nicht zur Zeichenfläche. */
@@ -663,6 +706,7 @@ CT.drawings = (function () {
     // Nur Klicks auf den Chart selbst – nicht auf Eigenschaftsleiste, Legende oder andere Bedienelemente darüber
     if (!chartEl.contains(e.target)) return;
     pointerType = e.pointerType || 'mouse';
+    ctrlHeld = e.ctrlKey || e.metaKey;
     const pos = local(e);
     if (!inPane(pos)) return;
 
@@ -708,6 +752,7 @@ CT.drawings = (function () {
   }
 
   function onMove(e) {
+    ctrlHeld = e.ctrlKey || e.metaKey;
     if (drag) {
       const pos = local(e);
       const d = drag.d;
@@ -1099,6 +1144,7 @@ CT.drawings = (function () {
       undo: undo,
       redo: redo,
       hide: function () { setHidden(!hidden); },
+      magnet: function () { setMagnet(MAGNET_MODES[(MAGNET_MODES.indexOf(magnet) + 1) % MAGNET_MODES.length]); },
       clear: clearAll,
       export: exportJson,
       import: function () { fileInput.value = ''; fileInput.click(); },
@@ -1110,6 +1156,7 @@ CT.drawings = (function () {
 
     CT.chart.on('data', function () { dirty = true; });
     setHidden(hidden);
+    setMagnet(magnet);
     updateHistoryButtons();
     requestAnimationFrame(loop);
   }

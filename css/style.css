@@ -727,3 +727,18 @@ svg {
   z-index: 1;
   pointer-events: none;
 }
+
+/* Magnet-Knopf: schwach = blau, stark = gelb mit "S" */
+.magnet-btn { position: relative; }
+.magnet-btn[data-mode="weak"] { color: #fff; background: var(--accent-soft); }
+.magnet-btn[data-mode="strong"] { color: var(--warn); background: rgba(240, 185, 11, 0.14); }
+.magnet-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.magnet-btn[data-mode="weak"] .magnet-badge::after { content: "W"; }
+.magnet-btn[data-mode="strong"] .magnet-badge::after { content: "S"; }

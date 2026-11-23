@@ -14,7 +14,7 @@ Läuft komplett statisch (HTML, CSS, JavaScript) auf GitHub Pages, als Teil mein
   Zurückscrollen, Fadenkreuz mit OHLC, Log-Skala, Symbolsuche über alle Binance-Spot-Paare
 - **Aktien, ETFs, Rohstoffe:** über Binance Futures, z. B. `NVDAUSDT.P`, `MSTRUSDT.P`, `TSLAUSDT.P`,
   `QQQUSDT.P` (Nasdaq-100), `SPYUSDT.P` (S&P 500), `IWMUSDT.P` (Russell 2000), `XAUUSDT.P` (Gold), dazu rund 250 weitere
-- **Zeichnen:** Trendlinie, Strahl, horizontale/vertikale Linie, Rechteck, Text, Fibonacci mit eigenen Levels, Volumenprofil über frei gewählte Kerzen
+- **Zeichnen:** Magnet (schwach/stark) wie bei TradingView, Trendlinie, Strahl, horizontale/vertikale Linie, Rechteck, Text, Fibonacci mit eigenen Levels, Volumenprofil über frei gewählte Kerzen
   (inkl. 0.886), Messwerkzeug. Verschieben, Farbe, Rückgängig/Wiederholen. Pro Symbol gespeichert, auf allen Zeitrahmen sichtbar
 - **Indikatoren:** SMA, EMA, Bollinger, VWAP, Volumen-MA, RSI, MACD, Stochastic RSI, ATR, Volumenprofil
   (POC, Value Area, Kauf-/Verkaufsvolumen), beliebig viele mit eigenen Parametern und Farben
@@ -107,6 +107,7 @@ entsprechen damit TradingView, sobald genug Historie geladen ist.
 | Fibonacci | `Alt+F`, Levels über „Levels“ in der Eigenschaftsleiste ändern (Standard inkl. 0.886) |
 | Messen | `Alt+M`: Preis- und Prozentdifferenz, Anzahl Kerzen, Dauer. Wird nicht gespeichert |
 | Volumenprofil (Bereich) | `Alt+P`: über die gewünschten Kerzen ziehen. POC, Value Area, Kauf/Verkauf. „Profil“ im Menü: Zeilen, Value Area %, Breite % |
+| Magnet | Knopf mit Magnet-Symbol links: aus → schwach (W, rastet in der Nähe von O/H/L/C ein) → stark (S, rastet immer ein). `Strg` halten schaltet beim Zeichnen vorübergehend um |
 | Bearbeiten | Zeichnung anklicken: Körper ziehen = verschieben, Punkt ziehen = Punkt ändern; Leiste oben: Farbe, Stärke, gestrichelt |
 | Löschen | `Entf`/`Backspace` oder Papierkorb in der Leiste; alle Zeichnungen des Symbols: Papierkorb links |
 | Rückgängig / Wiederholen | `Strg+Z` / `Strg+Y` (oder `Strg+Umschalt+Z`) |
@@ -201,6 +202,8 @@ Pine-Dateien für Schritt 4 noch fehlen. **Offen ist damit nur noch Schritt 4.**
   - Getestet mit echten Mausklicks: Trendlinie → Farbe rot, Löschen über das Menü, Volumenprofil ziehen/verschieben,
     1h → 4h, Stärke und „Profil“-Einstellungen. Gegenprobe: Summe des Profils = Summe des Kerzenvolumens,
     Value Area ≥ eingestellter Anteil
+- [x] **Zusatz – Magnet** *(fertig)*: schwach/stark, Strg schaltet vorübergehend um, gilt beim Setzen und beim Ziehen von Punkten.
+  Getestet: stark rastet auf das Hoch ein, schwach nur innerhalb von 18 px, aus = frei, Strg bei „aus“ = rastet ein
 
 ## Lokal starten
 

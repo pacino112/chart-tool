@@ -7,7 +7,7 @@
   <meta name="description" content="Eigenes Chart-Tool im Browser mit Binance-Daten, Zeichenwerkzeugen und eigenen Indikatoren.">
   <title>Chart-Tool</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1016'/%3E%3Cpath d='M10 6v20M22 4v20' stroke='%237d8496' stroke-width='2'/%3E%3Crect x='7' y='11' width='6' height='10' rx='1' fill='%2326a69a'/%3E%3Crect x='19' y='8' width='6' height='11' rx='1' fill='%23ef5350'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css?v=20261123-2">
+  <link rel="stylesheet" href="css/style.css?v=20261123-3">
 </head>
 <body>
   <div id="app">
@@ -68,6 +68,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3v18"/><path d="M4 6h7M4 10h12M4 14h16M4 18h9"/></svg>
       </button>
       <div class="tool-sep"></div>
+      <button class="tool-btn magnet-btn" data-action="magnet" data-mode="off" title="Magnet">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v8a6 6 0 0 0 12 0V4"/><path d="M6 4h4v8a2 2 0 0 0 4 0V4h4"/><path d="M6 8h4M14 8h4"/></svg>
+        <span class="magnet-badge" aria-hidden="true"></span>
+      </button>
       <button class="tool-btn" data-action="undo" title="Rückgängig (Strg+Z)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
       </button>
@@ -146,14 +150,14 @@
   <div id="toast" class="toast" hidden></div>
 
   <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="js/storage.js?v=20261123-2"></script>
-  <script src="js/binance.js?v=20261123-2"></script>
-  <script src="js/chart.js?v=20261123-2"></script>
-  <script src="js/symbols.js?v=20261123-2"></script>
-  <script src="js/drawings.js?v=20261123-2"></script>
-  <script src="js/ta.js?v=20261123-2"></script>
-  <script src="js/indicators.js?v=20261123-2"></script>
-  <script src="js/watchlist.js?v=20261123-2"></script>
-  <script src="js/app.js?v=20261123-2"></script>
+  <script src="js/storage.js?v=20261123-3"></script>
+  <script src="js/binance.js?v=20261123-3"></script>
+  <script src="js/chart.js?v=20261123-3"></script>
+  <script src="js/symbols.js?v=20261123-3"></script>
+  <script src="js/drawings.js?v=20261123-3"></script>
+  <script src="js/ta.js?v=20261123-3"></script>
+  <script src="js/indicators.js?v=20261123-3"></script>
+  <script src="js/watchlist.js?v=20261123-3"></script>
+  <script src="js/app.js?v=20261123-3"></script>
 </body>
 </html>
