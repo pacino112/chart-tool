@@ -210,3 +210,7 @@ Pine-Dateien für Schritt 4 noch fehlen. **Offen ist damit nur noch Schritt 4.**
 
 Veröffentlicht aus Branch `main`, Ordner `/ (root)` (Repository → Settings → Pages).
 Erreichbar unter https://pacino112.github.io/chart-tool/.
+
+**Neue Version ausliefern:** GitHub Pages lässt Browser Dateien bis zu 10 Minuten zwischenspeichern. Deshalb
+tragen alle Skripte und das CSS in `index.html` eine Versionsnummer (`?v=…`). Bei jeder Änderung an JS oder CSS
+die Nummer in `index.html` hochzählen, sonst sehen Besucher bis zu 10 Minuten lang alten Code. `Strg+F5` lädt sofort neu.
