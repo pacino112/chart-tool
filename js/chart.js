@@ -28,7 +28,7 @@ CT.chart = (function () {
   let historyComplete = false;
   let hovering = false;
   let priceDecimals = 2;
-  const listeners = { status: [], loading: [], error: [], price: [] };
+  const listeners = { status: [], loading: [], error: [], price: [], data: [] };
 
   function emit(type, value) { listeners[type].forEach(function (fn) { fn(value); }); }
   function on(type, fn) { listeners[type].push(fn); }
@@ -229,6 +229,7 @@ CT.chart = (function () {
   function render() {
     candles.setData(bars.map(toCandle));
     volume.setData(bars.map(toVolume));
+    emit('data', bars);
   }
 
   /* ---------- Laden ---------- */
@@ -286,6 +287,7 @@ CT.chart = (function () {
       bars[bars.length - 1] = bar;
     } else if (bar.openTime > last.openTime) {
       bars.push(bar);
+      emit('data', bars);
     } else {
       return; // ältere Kerze – ignorieren
     }
@@ -371,6 +373,7 @@ CT.chart = (function () {
     toChartTime,
     fromChartTime,
     labelFor,
+    formatPrice: function (v) { return fmtPrice(v); },
     get api() { return chart; },
     get series() { return { candles, volume }; },
     get bars() { return bars; },

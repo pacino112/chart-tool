@@ -26,10 +26,54 @@
     </header>
 
     <nav class="toolbar" aria-label="Werkzeuge">
-      <button class="tool-btn active" title="Fadenkreuz" aria-pressed="true">
+      <button class="tool-btn active" data-tool="cursor" title="Fadenkreuz / Auswählen (Esc)" aria-pressed="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>
       </button>
-      <!-- Zeichenwerkzeuge folgen in Schritt 2 -->
+      <button class="tool-btn" data-tool="trend" title="Trendlinie (Alt+T)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6"/><circle cx="5" cy="19" r="1.8"/><circle cx="19" cy="5" r="1.8"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="ray" title="Strahl (Alt+X)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 22 2"/><circle cx="5" cy="19" r="1.8"/><circle cx="12" cy="12" r="1.8"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="hline" title="Horizontale Linie (Alt+H)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h20"/><circle cx="12" cy="12" r="1.8"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="vline" title="Vertikale Linie (Alt+V)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><circle cx="12" cy="12" r="1.8"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="rect" title="Rechteck (Alt+B)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="text" title="Text (Alt+K)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7V4h14v3M12 4v16M9 20h6"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="fib" title="Fibonacci-Retracement (Alt+F)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18M3 9h18M3 13h18M3 20h18"/><path d="M5 20 19 4" stroke-dasharray="2 2"/></svg>
+      </button>
+      <button class="tool-btn" data-tool="measure" title="Messen (Alt+M)" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg>
+      </button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" data-action="undo" title="Rückgängig (Strg+Z)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+      </button>
+      <button class="tool-btn" data-action="redo" title="Wiederholen (Strg+Y)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg>
+      </button>
+      <button class="tool-btn" data-action="hide" title="Zeichnungen ausblenden">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="tool-btn" data-action="clear" title="Alle Zeichnungen dieses Symbols löschen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      </button>
+      <div class="tool-sep"></div>
+      <button class="tool-btn" data-action="export" title="Sicherung exportieren (JSON)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      </button>
+      <button class="tool-btn" data-action="import" title="Sicherung importieren (JSON)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>
+      </button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
     </nav>
 
     <main class="chart-wrap">
@@ -64,6 +108,7 @@
   <script src="js/binance.js"></script>
   <script src="js/chart.js"></script>
   <script src="js/symbols.js"></script>
+  <script src="js/drawings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

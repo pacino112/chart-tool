@@ -54,6 +54,7 @@ window.CT = window.CT || {};
     state.interval = interval;
     $('symbolLabel').textContent = symbol;
     renderTfBar();
+    CT.drawings.setSymbol(symbol);
     const ok = await CT.chart.load(symbol, interval, CT.symbols.get(symbol));
     if (ok) {
       lastGood = symbol;
@@ -266,6 +267,7 @@ window.CT = window.CT || {};
     }
     readHash();
     CT.chart.init($('chart'), $('legend'));
+    CT.drawings.init(document.querySelector('.chart-wrap'), $('chart'));
     bind();
     applyLog();
     open(state.symbol, state.interval);

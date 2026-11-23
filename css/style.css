@@ -152,8 +152,12 @@ svg {
   align-items: center;
   justify-content: center;
 }
+.tool-btn { flex-shrink: 0; }
 .tool-btn:hover { background: var(--panel-2); color: var(--text); }
 .tool-btn.active { color: #fff; background: var(--accent-soft); }
+.tool-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+.tool-btn[data-action="hide"].active { color: var(--warn); background: rgba(240, 185, 11, 0.12); }
+.tool-sep { width: 24px; height: 1px; margin: 5px 0; background: var(--border); flex-shrink: 0; }
 
 /* ---------- Chart ---------- */
 .chart-wrap {
@@ -163,6 +167,78 @@ svg {
   min-height: 0;
 }
 .chart { position: absolute; inset: 0; }
+
+/* Zeichen-Ebene über dem Chart; Eingaben gehen an den Chart, Zeichnen fängt sie vorher ab */
+.draw-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.chart-wrap.cur-draw .chart * { cursor: crosshair !important; }
+.chart-wrap.cur-move .chart * { cursor: move !important; }
+.chart-wrap.cur-handle .chart * { cursor: pointer !important; }
+
+/* Eigenschaften der ausgewählten Zeichnung */
+.draw-props {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 80px);
+  padding: 4px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.draw-props[hidden] { display: none; }
+.draw-props button, .draw-props select {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.draw-props button:hover { background: var(--panel-2); }
+.draw-props button.active { background: var(--accent-soft); color: #fff; }
+.draw-props button[hidden] { display: none; }
+.draw-props select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font: inherit;
+}
+.dp-swatches { display: flex; gap: 3px; flex-shrink: 0; }
+.draw-props .dp-swatch {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.draw-props .dp-swatch.active { border-color: #fff; }
+.dp-custom {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+}
+.dp-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.draw-props .dp-delete { color: var(--down); }
+.draw-props .dp-delete svg { width: 16px; height: 16px; }
 
 .legend {
   position: absolute;
