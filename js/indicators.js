@@ -149,51 +149,8 @@ CT.indicators = (function () {
     },
   };
 
-  /* =================== Volumenprofil-Rechnung ===================
-     Das Volumen jeder Kerze wird anteilig auf alle Preiszeilen verteilt, die die Kerze von Tief bis Hoch
-     überdeckt (Näherung – Binance liefert keine Umsätze pro Preis). Grüne Kerzen zählen als Kauf-,
-     rote als Verkaufsvolumen. POC = Zeile mit dem meisten Volumen. Value Area = vom POC aus nach oben/unten
-     erweitert (jeweils zur volumenstärkeren Seite), bis der eingestellte Anteil des Gesamtvolumens erreicht ist. */
-  function volumeProfile(bars, from, to, rows, vaPct) {
-    let lo = Infinity;
-    let hi = -Infinity;
-    for (let i = from; i <= to; i++) { lo = Math.min(lo, bars[i].low); hi = Math.max(hi, bars[i].high); }
-    if (!isFinite(lo) || hi <= lo) return null;
-    const step = (hi - lo) / rows;
-    const up = new Array(rows).fill(0);
-    const down = new Array(rows).fill(0);
-    for (let i = from; i <= to; i++) {
-      const b = bars[i];
-      const target = b.close >= b.open ? up : down;
-      const span = b.high - b.low;
-      if (span <= 0) {
-        target[Math.min(rows - 1, Math.floor((b.close - lo) / step))] += b.volume;
-        continue;
-      }
-      const r0 = Math.max(0, Math.floor((b.low - lo) / step));
-      const r1 = Math.min(rows - 1, Math.floor((b.high - lo) / step));
-      for (let r = r0; r <= r1; r++) {
-        const overlap = Math.min(b.high, lo + (r + 1) * step) - Math.max(b.low, lo + r * step);
-        if (overlap > 0) target[r] += b.volume * overlap / span;
-      }
-    }
-    const total = up.map(function (u, r) { return u + down[r]; });
-    const sum = total.reduce(function (a, v) { return a + v; }, 0);
-    let poc = 0;
-    total.forEach(function (v, r) { if (v > total[poc]) poc = r; });
-    let a = poc;
-    let z = poc;
-    let acc = total[poc];
-    while (acc < sum * vaPct / 100 && (a > 0 || z < rows - 1)) {
-      const below = a > 0 ? total[a - 1] : -1;
-      const above = z < rows - 1 ? total[z + 1] : -1;
-      if (above >= below) { z++; acc += total[z]; } else { a--; acc += total[a]; }
-    }
-    return {
-      lo: lo, step: step, up: up, down: down, total: total, max: total[poc], poc: poc, vaLow: a, vaHigh: z,
-      pocPrice: lo + (poc + 0.5) * step, vah: lo + (z + 1) * step, val: lo + a * step,
-    };
-  }
+  // Volumenprofil-Rechnung liegt in js/ta.js (wird auch vom Zeichenwerkzeug benutzt)
+  const volumeProfile = ta.volumeProfile;
 
   function src(p) { return p.source && p.source !== 'close' ? ' ' + p.source : ''; }
 

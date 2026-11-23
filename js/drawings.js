@@ -22,13 +22,16 @@ CT.drawings = (function () {
     text: { name: 'Text', pts: 1 },
     fib: { name: 'Fibonacci', pts: 2 },
     measure: { name: 'Messen', pts: 2 },
+    vprofile: { name: 'Volumenprofil (Bereich)', pts: 2 },
   };
-  const SAVED_TYPES = ['trend', 'ray', 'hline', 'vline', 'rect', 'text', 'fib'];
+  const SAVED_TYPES = ['trend', 'ray', 'hline', 'vline', 'rect', 'text', 'fib', 'vprofile'];
   const DEFAULT_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 0.886, 1];
   const DEFAULT_COLORS = {
     trend: '#2962ff', ray: '#2962ff', hline: '#f0b90b', vline: '#9598a1',
-    rect: '#9c27b0', text: '#d1d4dc', fib: '#26a69a',
+    rect: '#9c27b0', text: '#d1d4dc', fib: '#26a69a', vprofile: '#ffd600',
   };
+  // Volumenprofil-Zeichnung: Zeilen, Value Area in %, Breite des Profils in % der Bereichsbreite
+  const DEFAULT_VP = { rows: 24, va: 70, width: 40 };
   const SWATCHES = ['#2962ff', '#26a69a', '#ef5350', '#f0b90b', '#ff9800', '#9c27b0', '#00bcd4', '#d1d4dc'];
   const INTERVAL_MS = {
     '1m': 6e4, '3m': 18e4, '5m': 3e5, '15m': 9e5, '30m': 18e5, '1h': 36e5, '2h': 72e5, '4h': 144e5,
@@ -69,6 +72,7 @@ CT.drawings = (function () {
     return {
       fibLevels: Array.isArray(s.fibLevels) && s.fibLevels.length ? s.fibLevels.filter(isFinite) : DEFAULT_LEVELS.slice(),
       colors: s.colors && typeof s.colors === 'object' ? s.colors : {},
+      vp: s.vp ? cleanVp(s.vp) : null,
     };
   }
   function saveSettings() { CT.store.set('drawSettings', settings); }
@@ -89,8 +93,22 @@ CT.drawings = (function () {
         dash: !!d.dash,
         text: d.type === 'text' ? String(d.text || '') : undefined,
         levels: d.type === 'fib' && Array.isArray(d.levels) ? d.levels.filter(isFinite).map(Number) : undefined,
+        vp: d.type === 'vprofile' ? cleanVp(d.vp) : undefined,
       };
     });
+  }
+
+  function cleanVp(v) {
+    const o = v || {};
+    const num = function (x, def, min, max) {
+      const n = parseInt(x, 10);
+      return isFinite(n) ? Math.max(min, Math.min(max, n)) : def;
+    };
+    return {
+      rows: num(o.rows, DEFAULT_VP.rows, 4, 400),
+      va: num(o.va, DEFAULT_VP.va, 10, 100),
+      width: num(o.width, DEFAULT_VP.width, 5, 100),
+    };
   }
 
   function save() {
@@ -352,9 +370,85 @@ CT.drawings = (function () {
         });
         break;
       }
+      case 'vprofile':
+        drawRangeProfile(d, selected);
+        break;
     }
     ctx.setLineDash([]);
     if (selected) handles(P);
+  }
+
+  /* ---------- Volumenprofil über einen gewählten Kerzenbereich (wie "Fixed Range Volume Profile") ---------- */
+  function rangeProfile(d) {
+    const b = bars();
+    if (!b.length || !CT.ta || !CT.ta.volumeProfile) return null;
+    const ta = Math.min(d.points[0].t, d.points[1].t);
+    const tb = Math.max(d.points[0].t, d.points[1].t);
+    const i1 = Math.max(0, Math.ceil(timeToLogical(ta) - 1e-6));
+    const i2 = Math.min(b.length - 1, Math.floor(timeToLogical(tb) + 1e-6));
+    if (i2 < i1) return null;
+    const s = d.vp || DEFAULT_VP;
+    const vp = CT.ta.volumeProfile(b, i1, i2, s.rows, s.va);
+    if (!vp) return null;
+    const x1 = xOf(ta);
+    const x2 = xOf(tb);
+    const yTop = yOf(vp.lo + s.rows * vp.step);
+    const yBot = yOf(vp.lo);
+    if (x1 === null || x2 === null || yTop === null || yBot === null) return null;
+    return { vp: vp, s: s, i1: i1, i2: i2, x1: x1, x2: x2, yTop: Math.min(yTop, yBot), yBot: Math.max(yTop, yBot) };
+  }
+
+  function drawRangeProfile(d, selected) {
+    const r = rangeProfile(d);
+    if (!r) return;
+    const vp = r.vp;
+    const rangeW = Math.max(1, r.x2 - r.x1);
+    const maxW = rangeW * r.s.width / 100;
+    // Rahmen des gewählten Bereichs
+    ctx.save();
+    ctx.fillStyle = rgba(d.color, selected ? 0.06 : 0.03);
+    ctx.fillRect(r.x1, r.yTop, rangeW, r.yBot - r.yTop);
+    ctx.strokeStyle = rgba(d.color, selected ? 0.6 : 0.25);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(Math.round(r.x1) + 0.5, Math.round(r.yTop) + 0.5, rangeW, r.yBot - r.yTop);
+    ctx.setLineDash([]);
+    // Zeilen: Kauf (grün) + Verkauf (rot), Value Area kräftiger
+    for (let i = 0; i < r.s.rows; i++) {
+      if (!vp.total[i]) continue;
+      const yA = yOf(vp.lo + (i + 1) * vp.step);
+      const yB = yOf(vp.lo + i * vp.step);
+      if (yA === null || yB === null) continue;
+      const y = Math.min(yA, yB);
+      const h = Math.max(1, Math.abs(yB - yA) - 1);
+      const inVA = i >= vp.vaLow && i <= vp.vaHigh;
+      const a = inVA ? 0.6 : 0.25;
+      const wUp = maxW * vp.up[i] / vp.max;
+      const wDn = maxW * vp.down[i] / vp.max;
+      ctx.fillStyle = rgba('#26a69a', a);
+      ctx.fillRect(r.x1, y, wUp, h);
+      ctx.fillStyle = rgba('#ef5350', a);
+      ctx.fillRect(r.x1 + wUp, y, wDn, h);
+    }
+    // POC über den ganzen Bereich, VAH/VAL gestrichelt
+    const hl = function (price, color, dash, w) {
+      const y = yOf(price);
+      if (y === null) return null;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(r.x1, Math.round(y) + 0.5);
+      ctx.lineTo(r.x2, Math.round(y) + 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return y;
+    };
+    hl(vp.vah, rgba(d.color, 0.55), [3, 3], 1);
+    hl(vp.val, rgba(d.color, 0.55), [3, 3], 1);
+    const yPoc = hl(vp.pocPrice, d.color, [], Math.max(1.5, d.width));
+    if (yPoc !== null) label('POC ' + CT.chart.formatPrice(vp.pocPrice), r.x2 + 4, yPoc, d.color === '#ffd600' ? '#8a7400' : d.color, 'left');
+    ctx.restore();
   }
 
   function handles(P) {
@@ -494,6 +588,11 @@ CT.drawings = (function () {
         return pos.x >= Math.min(P[0].x, P[1].x) - tol && pos.x <= Math.max(P[0].x, P[1].x) + tol &&
           pos.y >= Math.min.apply(null, ys) - tol && pos.y <= Math.max.apply(null, ys) + tol;
       }
+      case 'vprofile': {
+        const r = rangeProfile(d);
+        if (!r) return false;
+        return pos.x >= r.x1 - tol && pos.x <= r.x2 + tol && pos.y >= r.yTop - tol && pos.y <= r.yBot + tol;
+      }
     }
     return false;
   }
@@ -544,11 +643,25 @@ CT.drawings = (function () {
       color: settings.colors[type] || DEFAULT_COLORS[type] || '#2962ff',
       width: type === 'text' ? 2 : 1,
       dash: false,
+      vp: type === 'vprofile' ? cleanVp(settings.vp) : undefined,
     };
+  }
+
+  /** Volumenprofil: Griffe auf die Ecken des Bereichs legen (Preis ist hier nur für die Griffe da). */
+  function syncVpPoints(d) {
+    if (d.type !== 'vprofile') return;
+    const r = rangeProfile(d);
+    if (!r) return;
+    const top = r.vp.lo + r.s.rows * r.vp.step;
+    const first = d.points[0].t <= d.points[1].t ? 0 : 1;
+    d.points[first].p = top;
+    d.points[1 - first].p = r.vp.lo;
   }
 
   function onDown(e) {
     if (e.button !== 0 || !bars().length) return;
+    // Nur Klicks auf den Chart selbst – nicht auf Eigenschaftsleiste, Legende oder andere Bedienelemente darüber
+    if (!chartEl.contains(e.target)) return;
     pointerType = e.pointerType || 'mouse';
     const pos = local(e);
     if (!inPane(pos)) return;
@@ -626,9 +739,10 @@ CT.drawings = (function () {
   function onUp(e) {
     if (drag) {
       const moved = drag.moved;
+      const dd = drag.d;
       drag = null;
       lock(false);
-      if (moved) commit();
+      if (moved) { syncVpPoints(dd); commit(); dirty = true; }
       return;
     }
     if (!draft) return;
@@ -656,6 +770,10 @@ CT.drawings = (function () {
       const txt = window.prompt('Text eingeben:', '');
       if (!txt) { setTool('cursor'); return; }
       d.text = txt;
+    }
+    if (d.type === 'vprofile') {
+      if (!rangeProfile(d)) { CT.toast('Bitte über mindestens eine Kerze ziehen.', true); setTool('cursor'); return; }
+      syncVpPoints(d);
     }
     items.push(d);
     selectedId = d.id;
@@ -720,6 +838,7 @@ CT.drawings = (function () {
       '<button id="dpDash" title="Gestrichelt">┄</button>' +
       '<button id="dpText" title="Text bearbeiten">Text</button>' +
       '<button id="dpLevels" title="Fibonacci-Levels bearbeiten">Levels</button>' +
+      '<button id="dpVp" title="Zeilen, Value Area und Breite des Volumenprofils">Profil</button>' +
       '<button id="dpDelete" class="dp-delete" title="Löschen (Entf)">' +
       '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>';
     wrap.appendChild(propsEl);
@@ -765,6 +884,7 @@ CT.drawings = (function () {
       dirty = true;
     });
     propsEl.querySelector('#dpLevels').addEventListener('click', editLevels);
+    propsEl.querySelector('#dpVp').addEventListener('click', editVp);
     propsEl.querySelector('#dpDelete').addEventListener('click', removeSelected);
   }
 
@@ -801,6 +921,24 @@ CT.drawings = (function () {
     dirty = true;
   }
 
+  function editVp() {
+    const d = selected();
+    if (!d || d.type !== 'vprofile') return;
+    const s = d.vp || DEFAULT_VP;
+    const input = window.prompt(
+      'Volumenprofil: Zeilen, Value Area in %, Breite in % des Bereichs\n' +
+      '(durch Leerzeichen getrennt, z. B. „24 70 40“). Gilt auch als Standard für neue Profile.',
+      s.rows + ' ' + s.va + ' ' + s.width);
+    if (input === null) return;
+    const n = input.split(/[\s;,]+/).map(function (x) { return parseInt(x, 10); });
+    d.vp = cleanVp({ rows: n[0], va: n[1], width: n[2] });
+    settings.vp = d.vp;
+    saveSettings();
+    syncVpPoints(d);
+    commit();
+    dirty = true;
+  }
+
   function updateProps() {
     if (!propsEl) return;
     const d = hidden ? null : selected();
@@ -815,6 +953,7 @@ CT.drawings = (function () {
     propsEl.querySelector('#dpDash').hidden = d.type === 'text';
     propsEl.querySelector('#dpText').hidden = d.type !== 'text';
     propsEl.querySelector('#dpLevels').hidden = d.type !== 'fib';
+    propsEl.querySelector('#dpVp').hidden = d.type !== 'vprofile';
   }
 
   /* =================== Werkzeugleiste =================== */
@@ -928,7 +1067,7 @@ CT.drawings = (function () {
     if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (mod && e.code === 'KeyY') { e.preventDefault(); redo(); return; }
     if (e.altKey && !mod) {
-      const map = { KeyT: 'trend', KeyH: 'hline', KeyV: 'vline', KeyF: 'fib', KeyB: 'rect', KeyM: 'measure', KeyX: 'ray', KeyK: 'text' };
+      const map = { KeyT: 'trend', KeyH: 'hline', KeyV: 'vline', KeyF: 'fib', KeyB: 'rect', KeyM: 'measure', KeyX: 'ray', KeyK: 'text', KeyP: 'vprofile' };
       if (map[e.code]) { e.preventDefault(); setTool(map[e.code]); }
     }
   }
